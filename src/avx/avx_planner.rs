@@ -333,10 +333,9 @@ impl<T: FftNum> AvxPlannerInternal<f32, T> {
         if factors.get_power2() >= 5 {
             match factors.get_power3() {
                 // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
-                0 => match factors.get_power2() % 3 {
-                    0 => MixedRadixPlan::butterfly(512, vec![]),
-                    1 => MixedRadixPlan::butterfly(256, vec![]),
-                    2 => MixedRadixPlan::butterfly(256, vec![]),
+                0 => match factors.get_power2() % 2 {
+                    0 => MixedRadixPlan::butterfly(256, vec![]),
+                    1 => MixedRadixPlan::butterfly(512, vec![]),
                     _ => unreachable!(),
                 },
                 // if this FFT is 3 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
@@ -549,10 +548,9 @@ impl<T: FftNum> AvxPlannerInternal<f64, T> {
         if factors.get_power2() >= 4 {
             match factors.get_power3() {
                 // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
-                0 => match factors.get_power2() % 3 {
-                    0 => MixedRadixPlan::butterfly(512, vec![]),
-                    1 => MixedRadixPlan::butterfly(128, vec![]),
-                    2 => MixedRadixPlan::butterfly(256, vec![]),
+                0 => match factors.get_power2() % 2 {
+                    0 => MixedRadixPlan::butterfly(256, vec![]),
+                    1 => MixedRadixPlan::butterfly(512, vec![]),
                     _ => unreachable!(),
                 },
                 // if this FFT is 3 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
@@ -838,24 +836,25 @@ impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
             plan.push_radix_power(12, power_twelve);
             plan.push_radix_power(11, radix_factors.get_power11());
             plan.push_radix_power(9, radix_factors.get_power3() / 2);
-            plan.push_radix_power(8, radix_factors.get_power2() / 3);
+            //plan.push_radix_power(8, radix_factors.get_power2() / 3);
             plan.push_radix_power(7, radix_factors.get_power7());
             plan.push_radix_power(6, power_six);
             plan.push_radix_power(5, radix_factors.get_power5());
-            if radix_factors.get_power2() % 3 == 2 {
+           /*if radix_factors.get_power2() % 3 == 2 {
                 // our factors of 2 might not quite be a power of 8 -- our plan_power12_power6 function tried its best, but if we are a power of 2, it can't help.
                 // if we're 4 * 8^N, benchmarking shows that applying a 4 to the end our chain of 8s is very fast.
                 plan.push_radix(4);
-            }
+            }*/
+            plan.push_radix_power(4, radix_factors.get_power2() / 2);
             if radix_factors.get_power3() % 2 == 1 {
                 // our factors of 3 might not quite be a power of 9 -- our plan_power12_power6 function tried its best, but if we are a power of 3, it can't help.
                 // if we're 3 * 9^N, our only choice is to add an 8xn step
                 plan.push_radix(3);
             }
-            if radix_factors.get_power2() % 3 == 1 {
+            /*if radix_factors.get_power2() % 3 == 1 {
                 // our factors of 2 might not quite be a power of 8. We tried to correct this with a 16 radix and 4 radix, but as a last resort, apply a 2. 2 is very slow, but it's better than not computing the FFT
                 plan.push_radix(2);
-            }
+            }*/
 
             // measurement opportunity: is it faster to let the plan_power12_power6 function put a 4 on the end instead of relying on all 8's?
             // measurement opportunity: is it faster to slap a 16 on top of the stack?

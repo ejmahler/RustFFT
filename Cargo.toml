@@ -99,6 +99,10 @@ name = "bench_rustfft_sse"
 harness = false
 
 [[bench]]
+name = "bench_rustfft_avx"
+harness = false
+
+[[bench]]
 name = "bench_rustfft_wasm_simd"
 harness = false
 

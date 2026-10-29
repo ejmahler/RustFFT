@@ -256,7 +256,9 @@ mod avx64_utils;
 
 mod avx_bluesteins;
 mod avx_mixed_radix;
+mod avx_parallel_butterflies;
 mod avx_raders;
+pub mod avx_radix4;
 
 pub mod avx_planner;
 

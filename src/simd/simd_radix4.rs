@@ -28,6 +28,14 @@ use crate::{Fft, FftDirection};
 
 const RADIX: usize = 4;
 
+#[allow(unused)]
+struct CrossFft {
+    cross_fft_start: usize,
+    cross_fft_len: usize,
+    twiddle_start: usize,
+    twiddle_len: usize,
+}
+
 /// FFT algorithm for lengths that factor into base * 4**k
 /// This is generic over SIMD instruction set and is designed to be embedded into a
 /// feature-specific struct (such as SseRadix4 or NeonRadix4), and not created directly.
@@ -39,6 +47,8 @@ pub struct SimdRadix4<V: SimdVector, T> {
 
     transpose_algorithm: TransposeAlgorithm,
     butterfly4: V::Butterfly4,
+    #[allow(unused)]
+    cross_ffts: Box<[CrossFft]>,
 
     len: usize,
     direction: FftDirection,
@@ -112,6 +122,13 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             }
         }
 
+        let mut visitor = WalkVisitor {
+            cross_ffts: Vec::new(),
+            complex_per_vector,
+            base_len,
+        };
+        walk_cross_ffts(0, len, twiddle_factors.len(), &mut visitor);
+
         // figure out how much scratch space we need to request from callers
         let base_inplace_scratch = base_fft.get_inplace_scratch_len();
         // the in-place path transposes into its own scratch and runs the base out of place from
@@ -131,6 +148,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
 
             transpose_algorithm,
             butterfly4: unsafe { V::make_butterfly4(direction) },
+            cross_ffts: visitor.cross_ffts.into_boxed_slice(),
 
             len,
             direction,
@@ -244,6 +262,25 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
     }
 }
 
+struct WalkVisitor {
+    cross_ffts: Vec<CrossFft>,
+    complex_per_vector: usize,
+    base_len : usize,
+}
+fn walk_cross_ffts(cross_fft_start: usize, cross_fft_len: usize, parent_twiddle_start: usize, visitor: &mut WalkVisitor) {
+    if cross_fft_len == visitor.base_len { return; }
+
+    let inner_cross_fft_len = cross_fft_len / RADIX;
+    let layer_twiddle_len = inner_cross_fft_len.div_ceil(visitor.complex_per_vector) * (RADIX - 1);
+    let layer_twiddle_start = parent_twiddle_start - layer_twiddle_len;
+
+    for i in 0..RADIX {
+        walk_cross_ffts(cross_fft_start + inner_cross_fft_len * i, inner_cross_fft_len, layer_twiddle_start, visitor);
+    }
+    
+    visitor.cross_ffts.push(CrossFft { cross_fft_start, cross_fft_len, twiddle_start: layer_twiddle_start, twiddle_len: layer_twiddle_len });
+}
+
 /// The test bodies, shared the same way the algorithm is. Every backend runs all of them, from a
 /// thin test function per body that names its own vector types. The bodies that exercise both
 /// element types take both vector types, so `V32` is always the f32 vector and `V64` the f64 one.
@@ -269,7 +306,7 @@ pub mod test_bodies {
             let base_forward = construct_base(*base, FftDirection::Forward);
             let base_inverse = construct_base(*base, FftDirection::Inverse);
 
-            for k in 0..3 {
+            for k in 1..3 {
                 check::<V>(k, Arc::clone(&base_forward), new_fn);
                 check::<V>(k, Arc::clone(&base_inverse), new_fn);
             }

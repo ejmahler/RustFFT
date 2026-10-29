@@ -25,12 +25,12 @@ const RNG_SEED: [u8; 32] = [
 
 pub fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
-    let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::from_f32(10.0).unwrap()).unwrap();
+    let normal_dist: Uniform<f32> = Uniform::new(0.0, 10.0).unwrap();
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex {
-            re: normal_dist.sample(&mut rng),
-            im: normal_dist.sample(&mut rng),
+            re: T::from_f32(normal_dist.sample(&mut rng)).unwrap(),
+            im: T::from_f32(normal_dist.sample(&mut rng)).unwrap(),
         });
     }
     return sig;
@@ -106,6 +106,9 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
         let mut buffer = reference_input.clone();
 
         fft.process(&mut buffer);
+
+        dbg!(&expected_output);
+        dbg!(&buffer);
 
         if !compare_vectors(&expected_output, &buffer) {
             panic!(

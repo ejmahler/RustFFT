@@ -152,30 +152,10 @@ impl SimdVector for __m128d {
     }
 
     #[inline(always)]
-    unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a partial load of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Unused: a dup load of one complex f64 is just load_complex");
-    }
-
-    #[inline(always)]
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
         unsafe {
             _mm_storeu_pd(ptr as *mut f64, data);
         }
-    }
-
-    #[inline(always)]
-    unsafe fn store1_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn store1_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
     }
 
     #[inline(always)]

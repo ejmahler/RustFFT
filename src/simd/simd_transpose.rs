@@ -41,11 +41,18 @@ pub unsafe fn table_transpose<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: usize
     input: &[Complex<V::ScalarType>],
     output: &mut [Complex<V::ScalarType>],
 ) {
+    // We can support bigger vector sizes but the code needs to be modified to handle bigger remainders
+    const {
+        assert!(
+            V::COMPLEX_PER_VECTOR == 1 || V::COMPLEX_PER_VECTOR == 2 || V::COMPLEX_PER_VECTOR == 4
+        );
+    }
+
     // It'd be really cool to be able to write this all with just a single const generic set of functions, but rust's type system just isn't there yet
     // For example, you can't use an associated constant of a generic parameter as an array size (IE you can't write [V::zero_vector; V::COMPLEX_PER_VECTOR])
     // Until then it's easiest to just split ut up by COMPLEX_PER_VECTOR
     match V::COMPLEX_PER_VECTOR {
-        1 => unsafe {
+        1 | 4 => unsafe {
             table_transpose_1complex::<V, EXTERNAL_UNROLL_FACTOR>(
                 height,
                 reversed_columns,
@@ -297,11 +304,18 @@ pub unsafe fn unrolled_transpose<V: SimdVector, const WIDTH: usize>(
     input: &[Complex<V::ScalarType>],
     output: &mut [Complex<V::ScalarType>],
 ) {
+    // We can support bigger vector sizes but the code needs to be modified to handle bigger remainders
+    const {
+        assert!(
+            V::COMPLEX_PER_VECTOR == 1 || V::COMPLEX_PER_VECTOR == 2 || V::COMPLEX_PER_VECTOR == 4
+        );
+    }
+
     // It'd be really cool to be able to write this all with just a single const generic set of functions, but rust's type system just isn't there yet
     // For example, you can't use an associated constant of a generic parameter as an array size (IE you can't write [V::zero_vector; V::COMPLEX_PER_VECTOR])
     // Until then it's easiest to just split ut up by COMPLEX_PER_VECTOR
     match V::COMPLEX_PER_VECTOR {
-        1 => unrolled_transpose_1complex::<V, WIDTH>(height, input, output),
+        1 | 4 => unrolled_transpose_1complex::<V, WIDTH>(height, input, output),
         2 => unsafe { unrolled_transpose_2complex::<V, WIDTH>(height, input, output) },
         _ => unreachable!(),
     }

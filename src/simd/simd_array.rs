@@ -10,8 +10,12 @@ use crate::{array_utils::DoubleBuf, simd::simd_vector::SimdVector};
 pub trait SimdComplexArray<V: SimdVector>: Deref {
     // Load complex numbers from the array to fill a SIMD vector.
     unsafe fn load(&self, index: usize) -> V;
-    // Load a single complex number from the array into a SIMD vector, setting the unused elements to zero.
+    // Load a single complex number from the array into a SIMD vector, setting the unused elements to zero. Only callable on vectors where COMPLEX_PER_VECTOR > 1
     unsafe fn load1_lo(&self, index: usize) -> V;
+    // Load 2 complex numbers from the array, and copy it to all elements of a SIMD vector. Only callable on vectors where COMPLEX_PER_VECTOR > 2
+    unsafe fn load2_lo(&self, index: usize) -> V;
+    // Load 3 complex numbers from the array, and copy it to all elements of a SIMD vector. Only callable on vectors where COMPLEX_PER_VECTOR > 2
+    unsafe fn load3_lo(&self, index: usize) -> V;
     // Load a single complex number from the array, and copy it to all elements of a SIMD vector.
     #[allow(dead_code)]
     unsafe fn load1_dup(&self, index: usize) -> V;
@@ -31,6 +35,22 @@ impl<V: SimdVector> SimdComplexArray<V> for &[Complex<V::ScalarType>] {
         unsafe {
             debug_assert!(self.len() >= index + 1);
             V::load1_lo_complex(self.as_ptr().add(index))
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn load2_lo(&self, index: usize) -> V {
+        unsafe {
+            debug_assert!(self.len() >= index + 2);
+            V::load2_lo_complex(self.as_ptr().add(index))
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn load3_lo(&self, index: usize) -> V {
+        unsafe {
+            debug_assert!(self.len() >= index + 3);
+            V::load3_lo_complex(self.as_ptr().add(index))
         }
     }
 
@@ -60,6 +80,22 @@ impl<V: SimdVector> SimdComplexArray<V> for &mut [Complex<V::ScalarType>] {
     }
 
     #[inline(always)]
+    unsafe fn load2_lo(&self, index: usize) -> V {
+        unsafe {
+            debug_assert!(self.len() >= index + 2);
+            V::load2_lo_complex(self.as_ptr().add(index))
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn load3_lo(&self, index: usize) -> V {
+        unsafe {
+            debug_assert!(self.len() >= index + 3);
+            V::load3_lo_complex(self.as_ptr().add(index))
+        }
+    }
+
+    #[inline(always)]
     unsafe fn load1_dup(&self, index: usize) -> V {
         unsafe {
             debug_assert!(self.len() >= index + 1);
@@ -81,6 +117,14 @@ where
         unsafe { self.input.load1_lo(index) }
     }
     #[inline(always)]
+    unsafe fn load2_lo(&self, index: usize) -> V {
+        unsafe { self.input.load2_lo(index) }
+    }
+    #[inline(always)]
+    unsafe fn load3_lo(&self, index: usize) -> V {
+        unsafe { self.input.load3_lo(index) }
+    }
+    #[inline(always)]
     unsafe fn load1_dup(&self, index: usize) -> V {
         unsafe { self.input.load1_dup(index) }
     }
@@ -92,8 +136,12 @@ where
 pub trait SimdComplexArrayMut<V: SimdVector>: SimdComplexArray<V> + DerefMut {
     // Store all complex numbers from a SIMD vector to the array.
     unsafe fn store(&mut self, vector: V, index: usize);
-    // Store the low complex number from a SIMD vector to the array.
+    // Store the low complex number from a SIMD vector to the array. Only callable on vectors where COMPLEX_PER_VECTOR > 1
     unsafe fn store1_lo(&mut self, vector: V, index: usize);
+    // Store the low 2 complex numbers from a SIMD vector to the array. Only callable on vectors where COMPLEX_PER_VECTOR > 2
+    unsafe fn store2_lo(&mut self, vector: V, index: usize);
+    // Store the low 3 complex numbers from a SIMD vector to the array. Only callable on vectors where COMPLEX_PER_VECTOR > 2
+    unsafe fn store3_lo(&mut self, vector: V, index: usize);
 }
 
 impl<V: SimdVector> SimdComplexArrayMut<V> for &mut [Complex<V::ScalarType>] {
@@ -109,6 +157,20 @@ impl<V: SimdVector> SimdComplexArrayMut<V> for &mut [Complex<V::ScalarType>] {
         unsafe {
             debug_assert!(self.len() >= index + 1);
             V::store1_lo_complex(self.as_mut_ptr().add(index), vector)
+        }
+    }
+    #[inline(always)]
+    unsafe fn store2_lo(&mut self, vector: V, index: usize) {
+        unsafe {
+            debug_assert!(self.len() >= index + 2);
+            V::store2_lo_complex(self.as_mut_ptr().add(index), vector)
+        }
+    }
+    #[inline(always)]
+    unsafe fn store3_lo(&mut self, vector: V, index: usize) {
+        unsafe {
+            debug_assert!(self.len() >= index + 3);
+            V::store3_lo_complex(self.as_mut_ptr().add(index), vector)
         }
     }
 }
@@ -128,6 +190,18 @@ where
     unsafe fn store1_lo(&mut self, vector: V, index: usize) {
         unsafe {
             self.output.store1_lo(vector, index);
+        }
+    }
+    #[inline(always)]
+    unsafe fn store2_lo(&mut self, vector: V, index: usize) {
+        unsafe {
+            self.output.store2_lo(vector, index);
+        }
+    }
+    #[inline(always)]
+    unsafe fn store3_lo(&mut self, vector: V, index: usize) {
+        unsafe {
+            self.output.store3_lo(vector, index);
         }
     }
 }

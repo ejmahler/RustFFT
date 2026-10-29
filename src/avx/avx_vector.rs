@@ -5,6 +5,10 @@ use std::ops::{Deref, DerefMut};
 use num_complex::Complex;
 use num_traits::Zero;
 
+use crate::avx::avx_parallel_butterflies::*;
+use crate::avx::avx32_utils::transpose_4x4_f32;
+use crate::avx::avx64_utils::transpose_2x2_f64;
+use crate::simd::simd_vector::SimdVector;
 use crate::{FftDirection, array_utils::DoubleBuf, twiddles};
 
 use super::AvxNum;
@@ -869,8 +873,9 @@ impl AvxVector for __m256 {
         direction: FftDirection,
     ) -> Self {
         unsafe {
-            let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
-            for i in 0..Self::COMPLEX_PER_VECTOR {
+            let mut twiddle_chunk =
+                [Complex::<f32>::zero(); <Self as AvxVector>::COMPLEX_PER_VECTOR];
+            for i in 0..<Self as AvxVector>::COMPLEX_PER_VECTOR {
                 twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
             }
 
@@ -1287,8 +1292,9 @@ impl AvxVector for __m128 {
         direction: FftDirection,
     ) -> Self {
         unsafe {
-            let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
-            for i in 0..Self::COMPLEX_PER_VECTOR {
+            let mut twiddle_chunk =
+                [Complex::<f32>::zero(); <Self as AvxVector>::COMPLEX_PER_VECTOR];
+            for i in 0..<Self as AvxVector>::COMPLEX_PER_VECTOR {
                 twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
             }
 
@@ -1579,8 +1585,9 @@ impl AvxVector for __m256d {
         direction: FftDirection,
     ) -> Self {
         unsafe {
-            let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
-            for i in 0..Self::COMPLEX_PER_VECTOR {
+            let mut twiddle_chunk =
+                [Complex::<f64>::zero(); <Self as AvxVector>::COMPLEX_PER_VECTOR];
+            for i in 0..<Self as AvxVector>::COMPLEX_PER_VECTOR {
                 twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
             }
 
@@ -1922,8 +1929,9 @@ impl AvxVector for __m128d {
         direction: FftDirection,
     ) -> Self {
         unsafe {
-            let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
-            for i in 0..Self::COMPLEX_PER_VECTOR {
+            let mut twiddle_chunk =
+                [Complex::<f64>::zero(); <Self as AvxVector>::COMPLEX_PER_VECTOR];
+            for i in 0..<Self as AvxVector>::COMPLEX_PER_VECTOR {
                 twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
             }
 
@@ -2026,6 +2034,338 @@ impl AvxVector128 for __m128d {
 
             _mm_loadu_pd(ptr.offset(index_storage[0] as isize) as *const f64)
         }
+    }
+}
+
+impl SimdVector for __m256d {
+    const COMPLEX_PER_VECTOR: usize = 2;
+
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+
+    type ScalarType = f64;
+
+    type Butterfly2 = AvxF64ParallelButterfly2;
+    type Butterfly3 = AvxF64ParallelButterfly3;
+    type Butterfly4 = AvxF64ParallelButterfly4;
+    type Butterfly5 = AvxF64ParallelButterfly5;
+    type Butterfly6 = AvxF64ParallelButterfly6;
+    type Butterfly7 = AvxF64ParallelButterfly7;
+
+    #[inline(always)]
+    unsafe fn zero_vector() -> Self {
+        unsafe { _mm256_setzero_pd() }
+    }
+
+    #[inline(always)]
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { _mm256_loadu_pd(ptr as *const Self::ScalarType) }
+    }
+
+    #[inline(always)]
+    unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { _mm256_castpd128_pd256(_mm_loadu_pd(ptr as *const f64)) }
+    }
+
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe { _mm256_storeu_pd(ptr as *mut Self::ScalarType, data) }
+    }
+
+    #[inline(always)]
+    unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            _mm_storeu_pd(ptr as *mut f64, _mm256_castpd256_pd128(data));
+        }
+    }
+    #[inline(always)]
+    unsafe fn transpose_complex_2x2(data: [Self; 2]) -> [Self; 2] {
+        unsafe { transpose_2x2_f64(data) }
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        unsafe { _mm256_xor_pd(a, _mm256_set1_pd(-0.0)) }
+    }
+
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        unsafe { _mm256_add_pd(a, b) }
+    }
+
+    #[inline(always)]
+    unsafe fn sub(a: Self, b: Self) -> Self {
+        unsafe { _mm256_sub_pd(a, b) }
+    }
+
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        unsafe { _mm256_mul_pd(a, b) }
+    }
+
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        unsafe { _mm256_fmadd_pd(a, b, acc) }
+    }
+
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        unsafe { _mm256_fnmadd_pd(a, b, acc) }
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        unsafe { _mm256_set1_pd(value) }
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        unsafe {
+            // Extract the real and imaginary components from left into 2 separate registers
+            let (left_real, left_imag) = (_mm256_movedup_pd(left), _mm256_permute_pd(left, 0x0F));
+
+            // create a shuffled version of right where the imaginary values are swapped with the reals
+            let right_shuffled = _mm256_permute_pd(right, 0x05);
+
+            // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
+            let output_right = _mm256_mul_pd(left_imag, right_shuffled);
+
+            // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
+            _mm256_fmaddsub_pd(left_real, right, output_right)
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        unsafe {
+            let mut twiddle_chunk =
+                [Complex::<f64>::zero(); <Self as SimdVector>::COMPLEX_PER_VECTOR];
+            for i in 0..<Self as SimdVector>::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
+
+            _mm256_loadu_pd(twiddle_chunk.as_ptr() as *const f64)
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
+        unsafe { Self::Butterfly2::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
+        unsafe { Self::Butterfly3::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly4(direction: FftDirection) -> Self::Butterfly4 {
+        unsafe { Self::Butterfly4::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
+        unsafe { Self::Butterfly5::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
+        unsafe { Self::Butterfly6::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        unsafe { Self::Butterfly7::new(direction) }
+    }
+}
+
+impl SimdVector for __m256 {
+    const COMPLEX_PER_VECTOR: usize = 4;
+
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+
+    type ScalarType = f32;
+
+    type Butterfly2 = AvxF32ParallelButterfly2;
+    type Butterfly3 = AvxF32ParallelButterfly3;
+    type Butterfly4 = AvxF32ParallelButterfly4;
+    type Butterfly5 = AvxF32ParallelButterfly5;
+    type Butterfly6 = AvxF32ParallelButterfly6;
+    type Butterfly7 = AvxF32ParallelButterfly7;
+
+    #[inline(always)]
+    unsafe fn zero_vector() -> Self {
+        unsafe { _mm256_setzero_ps() }
+    }
+
+    #[inline(always)]
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { _mm256_loadu_ps(ptr as *const Self::ScalarType) }
+    }
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe { _mm256_storeu_ps(ptr as *mut Self::ScalarType, data) }
+    }
+
+    #[inline(always)]
+    unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe {
+            let data = _mm_load_sd(ptr as *const f64);
+            _mm256_castpd_ps(_mm256_castpd128_pd256(data))
+        }
+    }
+    #[inline(always)]
+    unsafe fn load2_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { _mm256_castps128_ps256(_mm_loadu_ps(ptr as *const f32)) }
+    }
+    #[inline(always)]
+    unsafe fn load3_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe {
+            let lo = Self::load2_lo_complex(ptr);
+            let hi = Self::load_partial1_complex(ptr.add(2));
+            _mm256_insertf128_ps(lo, hi, 1)
+        }
+    }
+
+    unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!()
+    }
+
+    #[inline(always)]
+    unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            _mm_store_sd(ptr as *mut f64, _mm_castps_pd(_mm256_castps256_ps128(data)));
+        }
+    }
+    #[inline(always)]
+    unsafe fn store2_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            _mm_storeu_ps(ptr as *mut f32, _mm256_castps256_ps128(data));
+        }
+    }
+    #[inline(always)]
+    unsafe fn store3_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            _mm_storeu_ps(ptr as *mut f32, _mm256_castps256_ps128(data));
+        }
+        unsafe {
+            _mm_store_sd(
+                ptr.add(2) as *mut f64,
+                _mm_castps_pd(_mm256_extractf128_ps(data, 1)),
+            );
+        }
+    }
+    unsafe fn store1_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!()
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_complex_4x4(data: [Self; 4]) -> [Self; 4] {
+        unsafe { transpose_4x4_f32(data) }
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        unsafe { _mm256_xor_ps(a, _mm256_set1_ps(-0.0)) }
+    }
+
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        unsafe { _mm256_add_ps(a, b) }
+    }
+
+    #[inline(always)]
+    unsafe fn sub(a: Self, b: Self) -> Self {
+        unsafe { _mm256_sub_ps(a, b) }
+    }
+
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        unsafe { _mm256_mul_ps(a, b) }
+    }
+
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        unsafe { _mm256_fmadd_ps(a, b, acc) }
+    }
+
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        unsafe { _mm256_fnmadd_ps(a, b, acc) }
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        unsafe { _mm256_set1_ps(value) }
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        unsafe {
+            // Extract the real and imaginary components from left into 2 separate registers
+            let (left_real, left_imag) = (_mm256_moveldup_ps(left), _mm256_movehdup_ps(left));
+
+            // create a shuffled version of right where the imaginary values are swapped with the reals
+            let right_shuffled = _mm256_permute_ps(right, 0xB1);
+
+            // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
+            let output_right = _mm256_mul_ps(left_imag, right_shuffled);
+
+            // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
+            _mm256_fmaddsub_ps(left_real, right, output_right)
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        unsafe {
+            let mut twiddle_chunk =
+                [Complex::<f32>::zero(); <Self as SimdVector>::COMPLEX_PER_VECTOR];
+            for i in 0..<Self as SimdVector>::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
+
+            _mm256_loadu_ps(twiddle_chunk.as_ptr() as *const f32)
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
+        unsafe { Self::Butterfly2::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
+        unsafe { Self::Butterfly3::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly4(direction: FftDirection) -> Self::Butterfly4 {
+        unsafe { Self::Butterfly4::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
+        unsafe { Self::Butterfly5::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
+        unsafe { Self::Butterfly6::new(direction) }
+    }
+
+    #[inline(always)]
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        unsafe { Self::Butterfly7::new(direction) }
     }
 }
 

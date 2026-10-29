@@ -5,6 +5,7 @@
 //! implements once per vector type, next to its own vector trait impls. Algorithms written against
 //! it, like `SimdRadixN`, then only exist once.
 
+use std::fmt::Debug;
 use std::unimplemented;
 
 use num_complex::Complex;
@@ -24,7 +25,7 @@ use crate::simd::parallel_fft::ParallelFft;
 /// Safety: every method here requires the current machine to support the backend's SIMD
 /// instruction set.
 #[allow(dead_code)]
-pub trait SimdVector: Copy + Send + Sync + Sized {
+pub trait SimdVector: Copy + Send + Sync + Sized + Debug {
     const COMPLEX_PER_VECTOR: usize;
     const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
 
@@ -43,31 +44,69 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     // loads of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
 
-    /// Load a single complex number into the low element, leaving the rest zeroed.
-    ///
-    /// Only a vector that holds more than one complex number can do this, so the f32 vectors
-    /// implement it while the single-complex f64 and scalar ones panic. Code generic over the
-    /// vector type must only reach it when `COMPLEX_PER_VECTOR > 1`.
-    unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
-    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
-
     // stores of complex numbers
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    /// Load a single complex number into the low element, leaving the rest zeroed.
+    /// Code generic over the vector type must only reach it when `COMPLEX_PER_VECTOR > 1`.
+    unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("This vector cannot do partial 1-element loads")
+    }
+
+    /// Load a 2 complex numbers into the low elements, leaving the rest zeroed.
+    /// Code generic over the vector type must only reach it when `COMPLEX_PER_VECTOR > 2`.
+    unsafe fn load2_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("This vector cannot do partial 2-element loads")
+    }
+
+    /// Load a 3 complex numbers into the low elements, leaving the rest zeroed.
+    /// Code generic over the vector type must only reach it when `COMPLEX_PER_VECTOR > 2`.
+    unsafe fn load3_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("This vector cannot do partial 3-element loads")
+    }
+
+    /// Load a 1 complex number and duplicate it into all elements.
+    /// Code generic over the vector type must only reach it when `COMPLEX_PER_VECTOR > 1`.
+    unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("This vector cannot do partial 1-element loads")
+    }
 
     /// Store the low element of a vector, writing a single complex number and leaving whatever
     /// follows it alone. Panics on the single-complex vectors, for the same reason as
     /// `load1_lo_complex`.
-    unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+    unsafe fn store1_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("This vector cannot do partial 1-element stores")
+    }
+    /// Store the low element of a vector, writing a 2 complex numbers and leaving whatever
+    /// follows it alone. Panics on the 2-complex vectors, for the same reason as
+    /// `load2_lo_complex`.
+    unsafe fn store2_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("This vector cannot do partial 2-element stores")
+    }
+    /// Store the low element of a vector, writing a 3 complex numbers and leaving whatever
+    /// follows it alone. Panics on the 2-complex vectors, for the same reason as
+    /// `load3_lo_complex`.
+    unsafe fn store3_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("This vector cannot do partial 3-element stores")
+    }
 
     // Keep this around even though it's unused - research went into how to do it, keeping it ensures that research doesn't need to be repeated
     #[allow(dead_code)]
-    unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+    unsafe fn store1_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("This vector cannot do partial 1-element stores")
+    }
 
     // Takes a 2x2 square of complex numbers and transposes it. Only implemented for COMPLEX_PER_VECTOR == 2.
     // Ideally we would instead have `transpose_complex_square(data: [Self; Self::COMPLEX_PER_VECTOR]) -> [Self; Self::COMPLEX_PER_VECTOR]`
     // but rustc can't handle associated constants as array bounds yet
     unsafe fn transpose_complex_2x2(_data: [Self; 2]) -> [Self; 2] {
         unimplemented!("This vector can't execute a 2x2 transpose")
+    }
+    // Takes a 4x4 square of complex numbers and transposes it. Only implemented for COMPLEX_PER_VECTOR == 4.
+    // Ideally we would instead have `transpose_complex_square(data: [Self; Self::COMPLEX_PER_VECTOR]) -> [Self; Self::COMPLEX_PER_VECTOR]`
+    // but rustc can't handle associated constants as array bounds yet
+    unsafe fn transpose_complex_4x4(_data: [Self; 4]) -> [Self; 4] {
+        unimplemented!("This vector can't execute a 4x4 transpose")
     }
 
     // math ops

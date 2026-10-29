@@ -308,12 +308,12 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
 
 // Algorithms implemented to use AVX instructions. Only compiled on x86_64, and only compiled if the "avx" feature flag is set.
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-mod avx;
+pub mod avx;
 
 // If we're not on x86_64, or if the "avx" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the AVX planner and compile it on any platform
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
-mod avx {
+pub mod avx {
     pub mod avx_planner {
         use crate::{Fft, FftDirection, FftNum};
         use std::sync::Arc;

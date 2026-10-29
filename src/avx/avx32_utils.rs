@@ -1,5 +1,7 @@
 use std::arch::x86_64::*;
 
+use crate::FftDirection;
+
 use super::avx_vector::{AvxVector, AvxVector256};
 
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
@@ -286,5 +288,66 @@ pub unsafe fn transpose_8x8_f32(
         ];
 
         (output0, output1)
+    }
+}
+
+/// Utility function that puts the fmadd arguments in the same order as neon, so code can be generated the same, and it looks the same when you skim
+#[inline]
+#[target_feature(enable = "avx,fma")]
+pub fn fmadd_ps(acc: __m256, a: __m256, b: __m256) -> __m256 {
+    _mm256_fmadd_ps(a, b, acc)
+}
+/// Utility function that puts the fmadd arguments in the same order as neon, so code can be generated the same, and it looks the same when you skim
+#[inline]
+#[target_feature(enable = "avx,fma")]
+pub fn nmadd_ps(acc: __m256, a: __m256, b: __m256) -> __m256 {
+    _mm256_fnmadd_ps(a, b, acc)
+}
+
+pub struct Rotate90F32 {
+    sign: __m256,
+}
+
+impl Rotate90F32 {
+    #[inline]
+    #[target_feature(enable = "avx,fma")]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            sign: if direction == FftDirection::Inverse {
+                _mm256_set_ps(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0)
+            } else {
+                _mm256_set_ps(-0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0)
+            },
+        }
+    }
+    #[inline]
+    #[target_feature(enable = "avx,fma")]
+    pub fn rotate(&self, values: __m256) -> __m256 {
+        let temp = _mm256_permute_ps(values, 0xB1);
+        _mm256_xor_ps(temp, self.sign)
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx,fma")]
+    pub fn _rotate_45(&self, values: __m256) -> __m256 {
+        let rotated = self.rotate(values);
+        let sum = _mm256_add_ps(rotated, values);
+        _mm256_mul_ps(sum, _mm256_set1_ps(0.5f32.sqrt()))
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx,fma")]
+    pub fn _rotate_135(&self, values: __m256) -> __m256 {
+        let rotated = self.rotate(values);
+        let diff = _mm256_sub_ps(rotated, values);
+        _mm256_mul_ps(diff, _mm256_set1_ps(0.5f32.sqrt()))
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx,fma")]
+    pub fn _rotate_225(&self, values: __m256) -> __m256 {
+        let rotated = self.rotate(values);
+        let diff = _mm256_add_ps(rotated, values);
+        _mm256_mul_ps(diff, _mm256_set1_ps(-(0.5f32.sqrt())))
     }
 }
