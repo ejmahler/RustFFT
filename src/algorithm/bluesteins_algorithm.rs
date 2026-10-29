@@ -75,6 +75,9 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
             direction.opposite_direction(),
         );
 
+        // Reuse the conjugated chirp for the input and output twiddles before scaling.
+        let twiddles: Vec<_> = inner_fft_input[..len].iter().map(|t| t.conj()).collect();
+
         // Scale the computed twiddles and copy them to the end of the array
         inner_fft_input[0] = inner_fft_input[0] * inner_fft_scale;
         for i in 1..len {
@@ -87,66 +90,21 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         let mut inner_fft_scratch = vec![Complex::zero(); inner_fft.get_inplace_scratch_len()];
         inner_fft.process_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
 
-        // also compute some more mundane twiddle factors to start and end with
-        let mut twiddles = vec![Complex::zero(); len];
-        twiddles::fill_bluesteins_twiddles(&mut twiddles, direction);
-
         Self {
-            inner_fft: inner_fft,
-
+            inner_fft,
             inner_fft_multiplier: inner_fft_input.into_boxed_slice(),
             twiddles: twiddles.into_boxed_slice(),
-
             len,
             direction,
         }
     }
 
-    fn perform_fft_inplace(&self, input: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len());
-
-        // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
-        for ((buffer_entry, inner_entry), twiddle) in input
-            .iter()
-            .zip(inner_input.iter_mut())
-            .zip(self.twiddles.iter())
-        {
-            *inner_entry = *buffer_entry * *twiddle;
-        }
-        for inner in (&mut inner_input[input.len()..]).iter_mut() {
-            *inner = Complex::zero();
-        }
-
-        // run our inner forward FFT
-        self.inner_fft
-            .process_with_scratch(inner_input, inner_scratch);
-
-        // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
-        for (inner, multiplier) in inner_input.iter_mut().zip(self.inner_fft_multiplier.iter()) {
-            *inner = (*inner * *multiplier).conj();
-        }
-
-        // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
-        self.inner_fft
-            .process_with_scratch(inner_input, inner_scratch);
-
-        // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
-        for ((buffer_entry, inner_entry), twiddle) in input
-            .iter_mut()
-            .zip(inner_input.iter())
-            .zip(self.twiddles.iter())
-        {
-            *buffer_entry = inner_entry.conj() * twiddle;
-        }
-    }
-
     #[inline]
-    fn perform_fft_immut(
+    fn compute_inner_fft<'a>(
         &self,
         input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
+        scratch: &'a mut [Complex<T>],
+    ) -> &'a [Complex<T>] {
         let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len());
 
         // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
@@ -173,6 +131,31 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
         self.inner_fft
             .process_with_scratch(inner_input, inner_scratch);
+
+        inner_input
+    }
+
+    fn perform_fft_inplace(&self, input: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let inner_input = self.compute_inner_fft(input, scratch);
+
+        // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
+        for ((buffer_entry, inner_entry), twiddle) in input
+            .iter_mut()
+            .zip(inner_input.iter())
+            .zip(self.twiddles.iter())
+        {
+            *buffer_entry = inner_entry.conj() * twiddle;
+        }
+    }
+
+    #[inline]
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        let inner_input = self.compute_inner_fft(input, scratch);
 
         // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
         for ((buffer_entry, inner_entry), twiddle) in output
@@ -213,7 +196,7 @@ mod unit_tests {
 
     #[test]
     fn test_bluesteins_scalar() {
-        for &len in &[3, 5, 7, 11, 13] {
+        for &len in &[1, 2, 3, 5, 7, 11, 13] {
             test_bluesteins_with_length(len, FftDirection::Forward);
             test_bluesteins_with_length(len, FftDirection::Inverse);
         }
