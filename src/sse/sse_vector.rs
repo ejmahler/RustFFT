@@ -6,6 +6,7 @@ use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies::*;
+use crate::sse::sse_utils::transpose_complex_2x2_f32;
 use crate::{FftDirection, twiddles};
 
 // Read these indexes from an SseArray and build an array of simd vectors.
@@ -315,6 +316,11 @@ impl SimdVector for __m128 {
         unsafe {
             _mm_storeh_pd(ptr as *mut f64, _mm_castps_pd(data));
         }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_complex_2x2(data: [Self; 2]) -> [Self; 2] {
+        unsafe { transpose_complex_2x2_f32(data[0], data[1]) }
     }
 
     #[inline(always)]

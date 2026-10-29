@@ -2,10 +2,10 @@ use core::arch::aarch64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
+use crate::fcma::fcma_utils::transpose_complex_2x2_f32;
+use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::{FftDirection, twiddles};
-
-use crate::simd::simd_array::SimdComplexArray;
 
 use super::fcma_butterflies::*;
 use super::fcma_prime_butterflies::*;
@@ -341,6 +341,11 @@ impl SimdVector for FcmaVector32 {
             let high = vget_high_f32(data.0);
             vst1_f32(ptr as *mut f32, high);
         }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_complex_2x2(data: [Self; 2]) -> [Self; 2] {
+        unsafe { transpose_complex_2x2_f32(data[0], data[1]) }
     }
 
     #[inline(always)]

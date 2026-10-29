@@ -2,6 +2,7 @@ use core::arch::aarch64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
+use crate::neon::neon_utils::transpose_complex_2x2_f32;
 use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::{FftDirection, twiddles};
@@ -320,6 +321,11 @@ impl SimdVector for float32x4_t {
             let high = vget_high_f32(data);
             vst1_f32(ptr as *mut f32, high);
         }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_complex_2x2(data: [Self; 2]) -> [Self; 2] {
+        unsafe { transpose_complex_2x2_f32(data[0], data[1]) }
     }
 
     #[inline(always)]

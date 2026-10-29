@@ -9,6 +9,7 @@ use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::wasm_simd::wasm_simd_butterflies::*;
 use crate::wasm_simd::wasm_simd_prime_butterflies::*;
+use crate::wasm_simd::wasm_simd_utils::transpose_complex_2x2_f32;
 
 /// Read these indexes from an WasmSimdArray and build an array of simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
@@ -323,6 +324,11 @@ impl SimdVector for WasmVector32 {
         unsafe {
             v128_store64_lane::<1>(data.0, ptr as *mut u64);
         }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_complex_2x2(data: [Self; 2]) -> [Self; 2] {
+        unsafe { transpose_complex_2x2_f32(data[0], data[1]) }
     }
 
     #[inline(always)]
