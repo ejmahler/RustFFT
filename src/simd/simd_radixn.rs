@@ -401,7 +401,7 @@ pub unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize>(
 // but that approach failed to inline on wasm simd, causing a horrible performance regression
 #[inline(always)]
 unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
-    data: &[Complex<V::ScalarType>],
+    data: &impl SimdComplexArray<V>,
     twiddles: &[V],
     num_columns: usize,
     idx: usize,
@@ -427,8 +427,8 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
 /// Unrolled two vectors at a time, which is what the SIMD Radix4's `butterfly_4` does and is what
 /// gets the two independent dependency chains needed to keep the FMA pipeline busy.
 #[inline(always)]
-unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
-    mut data: &mut [Complex<V::ScalarType>],
+pub unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
+    mut data: impl SimdComplexArrayMut<V>,
     twiddles: &[V],
     num_columns: usize,
     butterfly: &impl ParallelFft<V, RADIX>,
@@ -450,9 +450,9 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
                 let vcol = i * 2;
                 let idx = vcol * complex_per_vector;
 
-                let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+                let a = gather_and_twiddle(&data, twiddles, num_columns, idx, vcol * tw_stride);
                 let b = gather_and_twiddle(
-                    data,
+                    &data,
                     twiddles,
                     num_columns,
                     idx + complex_per_vector,
@@ -473,7 +473,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
                 let vcol = unroll_count * 2;
                 let idx = vcol * complex_per_vector;
                 let a = butterfly.parallel_fft(gather_and_twiddle(
-                    data,
+                    &data,
                     twiddles,
                     num_columns,
                     idx,
@@ -488,7 +488,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
                 let vcol = i;
                 let idx = vcol * complex_per_vector;
 
-                let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+                let a = gather_and_twiddle(&data, twiddles, num_columns, idx, vcol * tw_stride);
 
                 let a = butterfly.parallel_fft(a);
 

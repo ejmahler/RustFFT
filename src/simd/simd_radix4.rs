@@ -19,57 +19,151 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{reverse_bits, workaround_transmute, workaround_transmute_mut};
+use crate::array_utils::{
+    ArcSlice, DoubleBuf, reverse_bits, workaround_transmute, workaround_transmute_mut,
+};
 use crate::common::{FftNum, RadixFactor};
-use crate::simd::simd_radixn::cross_layer_chunks;
+use crate::simd::parallel_fft::ParallelFft;
+use crate::simd::simd_radixn::cross_layer;
 use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
 use crate::simd::simd_vector::SimdVector;
 use crate::{Fft, FftDirection};
 
 const RADIX: usize = 4;
 
+pub trait Radix4Layer<V: SimdVector, T: FftNum> {
+    // SAFETY:
+    // - The required CPU features for `V` must be present
+    unsafe fn process_layer(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+
+    // SAFETY:
+    // - The required CPU features for `V` must be present
+    unsafe fn process_layer_outofplace(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    );
+}
+
+pub enum Radix4ChildFft<V: SimdVector, T: FftNum, L: Radix4Layer<V, T>> {
+    Base(Arc<dyn Fft<T>>),
+    ChildLayer(Box<L>, std::marker::PhantomData<V>),
+}
+
+pub struct SimdRadix4Layer<V: SimdVector, T: FftNum, L: Radix4Layer<V, T>, B: ParallelFft<V, 4>> {
+    twiddles: ArcSlice<V>,
+
+    child_fft: Radix4ChildFft<V, T, L>,
+    butterfly: B,
+}
+
+impl<V: SimdVector, T: FftNum, L: Radix4Layer<V, T>, B: ParallelFft<V, 4>>
+    SimdRadix4Layer<V, T, L, B>
+{
+    pub fn new(twiddles: ArcSlice<V>, child_fft: Radix4ChildFft<V, T, L>, butterfly: B) -> Self {
+        Self {
+            twiddles,
+            child_fft,
+            butterfly,
+        }
+    }
+
+    #[inline(always)]
+    pub unsafe fn process_layer(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        // first, process the child FFTs, IE we're doing a preorder recursive traversal
+        match &self.child_fft {
+            Radix4ChildFft::Base(base_fft) => base_fft.process_with_scratch(buffer, scratch),
+            Radix4ChildFft::ChildLayer(child, _) => {
+                let inner_fft_len = buffer.len() / RADIX;
+                let mut chunks = buffer.chunks_exact_mut(inner_fft_len);
+                for _ in 0..RADIX {
+                    let chunk = unsafe { chunks.next().unwrap_unchecked() };
+
+                    unsafe { child.process_layer(chunk, scratch) };
+                }
+                debug_assert!(chunks.next().is_none() && chunks.into_remainder().is_empty());
+            }
+        }
+
+        // Now that the children are done, handle this layer's cross ffts
+        let buffer = unsafe { workaround_transmute_mut(buffer) };
+        let num_columns = buffer.len() / 4;
+        unsafe { cross_layer::<V, RADIX>(buffer, &self.twiddles, num_columns, &self.butterfly) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn process_layer_outofplace(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // first, process the child FFTs, IE we're doing a preorder recursive traversal
+        match &self.child_fft {
+            Radix4ChildFft::Base(base_fft) => {
+                let base_scratch = if scratch.is_empty() {
+                    &mut output[..]
+                } else {
+                    scratch
+                };
+                base_fft.process_with_scratch(input, base_scratch)
+            }
+            Radix4ChildFft::ChildLayer(child, _) => {
+                let inner_fft_len = input.len() / RADIX;
+                let mut child_buffer = &mut input[..];
+                while let Some((chunk, remainder)) =
+                    child_buffer.split_at_mut_checked(inner_fft_len)
+                {
+                    child_buffer = remainder;
+
+                    unsafe { child.process_layer(chunk, scratch) };
+                }
+            }
+        }
+
+        // Now that the children are done, handle this layer's cross ffts
+        let buffer = DoubleBuf {
+            input: unsafe { workaround_transmute(input) },
+            output: unsafe { workaround_transmute_mut(output) },
+        };
+        unsafe { cross_layer::<V, RADIX>(buffer, &self.twiddles, input.len() / 4, &self.butterfly) }
+    }
+}
+
 /// FFT algorithm for lengths that factor into base * 4**k
 /// This is generic over SIMD instruction set and is designed to be embedded into a
 /// feature-specific struct (such as SseRadix4 or NeonRadix4), and not created directly.
-pub struct SimdRadix4<V: SimdVector, T> {
-    twiddles: Box<[V]>,
-
-    base_fft: Arc<dyn Fft<T>>,
-    base_len: usize,
-
+pub struct SimdRadix4<V: SimdVector, T: FftNum, L: Radix4Layer<V, T>> {
     transpose_algorithm: TransposeAlgorithm,
-    butterfly4: V::Butterfly4,
+    cross_ffts: Radix4ChildFft<V, T, L>,
 
+    base_len: usize,
     len: usize,
     direction: FftDirection,
 
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
     immut_scratch_len: usize,
+
+    _phantom: std::marker::PhantomData<(V, T)>,
 }
 
-impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
+impl<V: SimdVector, T: FftNum, L: Radix4Layer<V, T>> SimdRadix4<V, T, L> {
     /// Constructs a SimdRadix4 which computes FFTs of length `k**4 * base_fft.len()`.
-    pub fn new(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
+    pub fn new(
+        k: u32,
+        base_fft: Arc<dyn Fft<T>>,
+        mut construct_layer_fn: impl FnMut(ArcSlice<V>, Radix4ChildFft<V, T, L>, FftDirection) -> L,
+    ) -> Self {
         // Internal sanity check: Make sure that the vector's scalar type is T.
         // This struct has two generic parameters V and T, but T must always be V's scalar type,
         // and they are only kept separate to help work around the lack of specialization.
         assert_eq!(TypeId::of::<V::ScalarType>(), TypeId::of::<T>());
 
         let base_len = base_fft.len();
+        let len = base_len << (2 * k);
         let direction = base_fft.fft_direction();
-        let complex_per_vector = V::COMPLEX_PER_VECTOR;
-
-        // set up our cross FFT butterfly instances. simultaneously, compute the number of twiddles
-        let mut cross_fft_len = base_len;
-        let mut twiddle_count = 0;
-
-        for _ in 0..k {
-            // twiddles are stored a vector at a time, so a layer needs one chunk per vector column
-            twiddle_count += cross_fft_len.div_ceil(complex_per_vector) * (RADIX - 1);
-            cross_fft_len *= RADIX;
-        }
-        let len = cross_fft_len;
 
         let transpose_algorithm = match k {
             0 => TransposeAlgorithm::Copy,
@@ -90,19 +184,26 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             }
         };
 
+        // Set up our twiddle factors.
         // Same packing as RadixN: all layers in one array, bottom layer first, and
         // within a layer, (radix - 1) = 3 twiddles per column.
-        let mut twiddle_factors: Vec<V> = Vec::with_capacity(twiddle_count);
+        let required_twiddle_count = |layer: u32| {
+            let cross_len = base_len << (2 * layer);
+            cross_len.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1)
+        };
+
+        let twiddle_count: usize = (0..k).map(required_twiddle_count).sum();
+        let mut twiddle_factors = Vec::with_capacity(twiddle_count);
         let mut cross_fft_len = base_len;
         for _ in 0..k {
-            let num_vector_columns = cross_fft_len.div_ceil(complex_per_vector);
+            let num_vector_columns = cross_fft_len.div_ceil(V::COMPLEX_PER_VECTOR);
             cross_fft_len *= RADIX;
 
             for i in 0..num_vector_columns {
                 for k in 1..RADIX {
                     unsafe {
                         twiddle_factors.push(V::make_mixedradix_twiddle_chunk(
-                            i * complex_per_vector,
+                            i * V::COMPLEX_PER_VECTOR,
                             k,
                             cross_fft_len,
                             direction,
@@ -111,33 +212,53 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
                 }
             }
         }
+        let twiddle_factors = Arc::from(twiddle_factors);
 
         // figure out how much scratch space we need to request from callers
         let base_inplace_scratch = base_fft.get_inplace_scratch_len();
         // the in-place path transposes into its own scratch and runs the base out of place from
         // there back into the caller's buffer, so it needs the base's out-of-place scratch on top
-        let inplace_scratch_len = len + base_fft.get_outofplace_scratch_len();
+        let inplace_scratch_len = if base_inplace_scratch > len {
+            len
+        } else {
+            len + base_inplace_scratch
+        };
         let outofplace_scratch_len = if base_inplace_scratch > len {
             base_inplace_scratch
         } else {
             0
         };
 
+        // Build our tree of child FFTs
+        let mut cross_ffts = Radix4ChildFft::Base(base_fft);
+        let mut twiddle_start = 0;
+        for i in 0..k {
+            let twiddle_len = required_twiddle_count(i);
+            let twiddle_end = twiddle_start + twiddle_len;
+
+            let layer_twiddles =
+                ArcSlice::new(Arc::clone(&twiddle_factors), twiddle_start..twiddle_end);
+            cross_ffts = Radix4ChildFft::ChildLayer(
+                Box::new(construct_layer_fn(layer_twiddles, cross_ffts, direction)),
+                std::marker::PhantomData,
+            );
+
+            twiddle_start = twiddle_end;
+        }
+
         Self {
-            twiddles: twiddle_factors.into_boxed_slice(),
-
-            base_fft,
-            base_len,
-
             transpose_algorithm,
-            butterfly4: unsafe { V::make_butterfly4(direction) },
+            cross_ffts,
 
+            base_len,
             len,
             direction,
 
             inplace_scratch_len,
             outofplace_scratch_len,
             immut_scratch_len: base_inplace_scratch,
+
+            _phantom: std::marker::PhantomData,
         }
     }
 
@@ -160,30 +281,6 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         }
     }
 
-    /// The stack of in-place cross-FFT layers, run after the base FFTs.
-    #[inline(always)]
-    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
-        unsafe {
-            let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
-
-            let mut cross_fft_len = self.base_len;
-            let mut layer_twiddles: &[V] = &self.twiddles;
-
-            while cross_fft_len < out.len() {
-                let num_columns = cross_fft_len;
-                cross_fft_len *= RADIX;
-
-                // Dispatch once per layer rather than once per chunk, so each layer runs a single
-                // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
-                cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, &self.butterfly4);
-
-                // skip past all the twiddle factors used in this layer
-                let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
-                layer_twiddles = &layer_twiddles[twiddle_offset..];
-            }
-        }
-    }
-
     #[inline(always)]
     pub fn process_single_immutable(
         &self,
@@ -192,8 +289,19 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         scratch: &mut [Complex<T>],
     ) {
         self.transpose(input, output);
-        self.base_fft.process_with_scratch(output, scratch);
-        unsafe { self.cross_ffts(output) };
+
+        match &self.cross_ffts {
+            Radix4ChildFft::Base(base_fft) => {
+                // We have no cross layers, so just directly call the child FFT
+                base_fft.process_with_scratch(output, scratch);
+            }
+            Radix4ChildFft::ChildLayer(layer, _) => {
+                // Call the top cross layer, which will recursively call the child layers
+                unsafe {
+                    layer.process_layer(output, scratch);
+                };
+            }
+        }
     }
 
     #[inline(always)]
@@ -204,23 +312,42 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         scratch: &mut [Complex<T>],
     ) {
         self.transpose(input, output);
+
         // the input is free once the transpose is done, so use it as base scratch
         // when we weren't handed any of our own
         let base_scratch = if !scratch.is_empty() { scratch } else { input };
-        self.base_fft.process_with_scratch(output, base_scratch);
-        unsafe { self.cross_ffts(output) };
+
+        match &self.cross_ffts {
+            Radix4ChildFft::Base(base_fft) => {
+                // We have no cross layers, so just directly call the child FFT
+                base_fft.process_with_scratch(output, base_scratch);
+            }
+            Radix4ChildFft::ChildLayer(layer, _) => {
+                // Call the top cross layer, which will recursively call the child layers
+                unsafe {
+                    layer.process_layer(output, base_scratch);
+                };
+            }
+        }
     }
 
     #[inline(always)]
     pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
         self.transpose(buffer, transposed);
-        // Run the base out of place, from the scratch back into the caller's chunk.
-        // The cross layers are then in place on the chunk, and the whole thing ends
-        // where the caller wants it without a final copy.
-        self.base_fft
-            .process_outofplace_with_scratch(transposed, buffer, inner_scratch);
-        unsafe { self.cross_ffts(buffer) };
+
+        match &self.cross_ffts {
+            Radix4ChildFft::Base(base_fft) => {
+                // We have no cross layers, so just directly call the child FFT
+                base_fft.process_outofplace_with_scratch(transposed, buffer, inner_scratch);
+            }
+            Radix4ChildFft::ChildLayer(layer, _) => {
+                // Call the top cross layer, which will recursively call the child layers
+                unsafe {
+                    layer.process_layer_outofplace(transposed, buffer, inner_scratch);
+                };
+            }
+        }
     }
     #[inline(always)]
     pub fn get_inplace_scratch_len(&self) -> usize {

@@ -2,6 +2,7 @@ use crate::Complex;
 use crate::FftNum;
 use crate::common::RadixFactor;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
@@ -542,4 +543,27 @@ pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> u
         }
     }
     result
+}
+
+pub struct ArcSlice<T> {
+    data: Arc<[T]>,
+    slice_range: std::range::Range<usize>,
+}
+
+impl<T> ArcSlice<T> {
+    pub fn new(data: Arc<[T]>, slice_range: std::ops::Range<usize>) -> Self {
+        assert!(slice_range.start <= data.len() && slice_range.end <= data.len());
+        Self {
+            data,
+            slice_range: slice_range.into(),
+        }
+    }
+}
+impl<T> Deref for ArcSlice<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: We asserted in `new()` that `self.slice_range` is a valid range for this slice
+        unsafe { self.data.get_unchecked(self.slice_range) }
+    }
 }
