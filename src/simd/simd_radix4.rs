@@ -383,7 +383,7 @@ macro_rules! boilerplate_simd_radix4 {
             pub fn new(
                 twiddles: crate::array_utils::ArcSlice<V>,
                 child: crate::simd::simd_radix4::SimdRadix4Child<V, T, $layer_struct_name<V, T>>,
-                direction: FftDirection,
+                direction: crate::FftDirection,
             ) -> Box<Self> {
                 Box::new(Self(crate::simd::simd_radix4::SimdRadix4Layer::new(twiddles, child, unsafe {
                     V::make_butterfly4(direction)
