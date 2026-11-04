@@ -7,60 +7,17 @@
 use std::sync::Arc;
 
 use crate::{
-    Fft, FftDirection, FftNum,
-    array_utils::ArcSlice,
-    simd::{
-        simd_radix4::{Radix4ChildFft, Radix4Layer, SimdRadix4, SimdRadix4Layer},
-        simd_vector::SimdVector,
-    },
+    Fft, FftDirection, FftNum, simd::simd_radix4::SimdRadix4, simd::simd_vector::SimdVector,
 };
-
-struct SseRadix4Layer<V: SimdVector, T: FftNum> {
-    simd_layer: SimdRadix4Layer<V, T, SseRadix4Layer<V, T>, V::Butterfly4>,
-}
-impl<V: SimdVector, T: FftNum> SseRadix4Layer<V, T> {
-    pub fn new(
-        twiddles: ArcSlice<V>,
-        child: Radix4ChildFft<V, T, SseRadix4Layer<V, T>>,
-        direction: FftDirection,
-    ) -> Self {
-        Self {
-            simd_layer: SimdRadix4Layer::new(twiddles, child, unsafe {
-                V::make_butterfly4(direction)
-            }),
-        }
-    }
-}
-impl<V: SimdVector, T: FftNum> Radix4Layer<V, T> for SseRadix4Layer<V, T> {
-    #[target_feature(enable = "sse4.1")]
-    unsafe fn process_layer(
-        &self,
-        buffer: &mut [num_complex::Complex<T>],
-        base_scratch: &mut [num_complex::Complex<T>],
-    ) {
-        unsafe { self.simd_layer.process_layer(buffer, base_scratch) }
-    }
-
-    #[target_feature(enable = "sse4.1")]
-    unsafe fn process_layer_outofplace(
-        &self,
-        input: &mut [num_complex::Complex<T>],
-        output: &mut [num_complex::Complex<T>],
-        base_scratch: &mut [num_complex::Complex<T>],
-    ) {
-        unsafe {
-            self.simd_layer
-                .process_layer_outofplace(input, output, base_scratch)
-        }
-    }
-}
 
 pub struct SseRadix4<V: SimdVector, T: FftNum>(SimdRadix4<V, T, SseRadix4Layer<V, T>>);
 impl<V: SimdVector, T: FftNum> SseRadix4<V, T> {
+    #[target_feature(enable = "sse4.1")]
     pub fn new(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
         Self(SimdRadix4::new(k, base_fft, SseRadix4Layer::new))
     }
 }
+boilerplate_simd_radix4!(SseRadix4, SseRadix4Layer, #[target_feature(enable = "sse4.1")]);
 boilerplate_simd_fft!(SseRadix4, #[target_feature(enable = "sse4.1")]);
 
 #[cfg(test)]

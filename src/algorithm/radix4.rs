@@ -7,52 +7,11 @@ use crate::{
     algorithm::butterflies::{
         Butterfly1, Butterfly2, Butterfly4, Butterfly8, Butterfly16, Butterfly32,
     },
-    array_utils::ArcSlice,
     simd::{
-        simd_radix4::{Radix4ChildFft, Radix4Layer, SimdRadix4, SimdRadix4Layer},
+        simd_radix4::{SimdRadix4, boilerplate_simd_radix4},
         simd_vector::SimdVector,
     },
 };
-
-struct ScalarRadix4Layer<V: SimdVector, T: FftNum> {
-    simd_layer: SimdRadix4Layer<V, T, ScalarRadix4Layer<V, T>, V::Butterfly4>,
-}
-impl<V: SimdVector, T: FftNum> ScalarRadix4Layer<V, T> {
-    pub fn new(
-        twiddles: ArcSlice<V>,
-        child: Radix4ChildFft<V, T, ScalarRadix4Layer<V, T>>,
-        direction: FftDirection,
-    ) -> Self {
-        Self {
-            simd_layer: SimdRadix4Layer::new(twiddles, child, unsafe {
-                V::make_butterfly4(direction)
-            }),
-        }
-    }
-}
-impl<V: SimdVector, T: FftNum> Radix4Layer<V, T> for ScalarRadix4Layer<V, T> {
-    #[inline]
-    unsafe fn process_layer(
-        &self,
-        buffer: &mut [num_complex::Complex<T>],
-        base_scratch: &mut [num_complex::Complex<T>],
-    ) {
-        unsafe { self.simd_layer.process_layer(buffer, base_scratch) }
-    }
-
-    #[inline]
-    unsafe fn process_layer_outofplace(
-        &self,
-        input: &mut [num_complex::Complex<T>],
-        output: &mut [num_complex::Complex<T>],
-        base_scratch: &mut [num_complex::Complex<T>],
-    ) {
-        unsafe {
-            self.simd_layer
-                .process_layer_outofplace(input, output, base_scratch)
-        }
-    }
-}
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -101,6 +60,7 @@ impl<T: FftNum> Radix4<T> {
         Self(SimdRadix4::new(k, base_fft, ScalarRadix4Layer::new))
     }
 }
+boilerplate_simd_radix4!(Radix4, ScalarRadix4Layer, #[inline]);
 boilerplate_scalar_fft!(Radix4, #[inline(always)]);
 
 #[cfg(test)]

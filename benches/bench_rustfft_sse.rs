@@ -4,7 +4,7 @@ use rustfft::Fft;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{criterion_group, criterion_main, Bencher, Criterion, BenchmarkId};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -14,10 +14,11 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
-    let mut buffer = vec![Complex::zero(); len];
+    let mut buffer_in = vec![Complex::zero(); len];
+    let mut buffer_out = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_with_scratch(&mut buffer, &mut scratch);
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut scratch);
     });
 }
 fn bench_planned_f64(b: &mut Bencher, len: usize) {
@@ -25,10 +26,11 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
-    let mut buffer = vec![Complex::zero(); len];
+    let mut buffer_in = vec![Complex::zero(); len];
+    let mut buffer_out = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_with_scratch(&mut buffer, &mut scratch);
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut scratch);
     });
 }
 
@@ -119,29 +121,30 @@ fn sse_prime_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 23);}
 fn sse_prime_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
 fn sse_prime_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
 
-// Powers of 2
-fn sse_planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b, 64); }
-fn sse_planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b, 128); }
-fn sse_planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b, 256); }
-fn sse_planned32_p2_00000512(b: &mut Bencher) { bench_planned_f32(b, 512); }
-fn sse_planned32_p2_00001024(b: &mut Bencher) { bench_planned_f32(b, 1024); }
-fn sse_planned32_p2_00002048(b: &mut Bencher) { bench_planned_f32(b, 2048); }
-fn sse_planned32_p2_00004096(b: &mut Bencher) { bench_planned_f32(b, 4096); }
-fn sse_planned32_p2_00016384(b: &mut Bencher) { bench_planned_f32(b, 16384); }
-fn sse_planned32_p2_00065536(b: &mut Bencher) { bench_planned_f32(b, 65536); }
-fn sse_planned32_p2_01048576(b: &mut Bencher) { bench_planned_f32(b, 1048576); }
+fn bench_groups(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("sse_planned64_p2");
 
-fn sse_planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b, 64); }
-fn sse_planned64_p2_00000128(b: &mut Bencher) { bench_planned_f64(b, 128); }
-fn sse_planned64_p2_00000256(b: &mut Bencher) { bench_planned_f64(b, 256); }
-fn sse_planned64_p2_00000512(b: &mut Bencher) { bench_planned_f64(b, 512); }
-fn sse_planned64_p2_00001024(b: &mut Bencher) { bench_planned_f64(b, 1024); }
-fn sse_planned64_p2_00002048(b: &mut Bencher) { bench_planned_f64(b, 2048); }
-fn sse_planned64_p2_00004096(b: &mut Bencher) { bench_planned_f64(b, 4096); }
-fn sse_planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b, 16384); }
-fn sse_planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b, 65536); }
-fn sse_planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b, 1048576); }
+        let base_len = 32;
+        for k in 1..12 {
+            let len = base_len * 4usize.pow(k);
+            group.bench_with_input(BenchmarkId::new("planned", len), &len, |b, _| {
+                bench_planned_f64(b, len);
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse_planned32_p2");
 
+        let base_len = 32;
+        for k in 1..12 {
+            let len = base_len * 4usize.pow(k);
+            group.bench_with_input(BenchmarkId::new("planned", len), &len, |b, _| {
+                bench_planned_f32(b, len);
+            });
+        }
+    }
+}
 
 // Powers of 7
 fn sse_planned32_p7_00343(b: &mut Bencher) { bench_planned_f32(b,   343); }
@@ -250,26 +253,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         sse_prime_butterfly64_23,
         sse_prime_butterfly64_29,
         sse_prime_butterfly64_31,
-        sse_planned32_p2_00000064,
-        sse_planned32_p2_00000128,
-        sse_planned32_p2_00000256,
-        sse_planned32_p2_00000512,
-        sse_planned32_p2_00001024,
-        sse_planned32_p2_00002048,
-        sse_planned32_p2_00004096,
-        sse_planned32_p2_00016384,
-        sse_planned32_p2_00065536,
-        sse_planned32_p2_01048576,
-        sse_planned64_p2_00000064,
-        sse_planned64_p2_00000128,
-        sse_planned64_p2_00000256,
-        sse_planned64_p2_00000512,
-        sse_planned64_p2_00001024,
-        sse_planned64_p2_00002048,
-        sse_planned64_p2_00004096,
-        sse_planned64_p2_00016384,
-        sse_planned64_p2_00065536,
-        sse_planned64_p2_01048576,
         sse_planned32_p7_00343,
         sse_planned32_p7_02401,
         sse_planned32_p7_16807,
@@ -310,6 +293,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, bench_groups
 }
 criterion_main!(benches);
