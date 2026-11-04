@@ -34,7 +34,7 @@ use rustfft::Fft;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{criterion_group, criterion_main, Bencher, Criterion, BenchmarkId};
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -43,10 +43,11 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
-    let mut buffer = vec![Complex::zero(); len];
+    let mut buffer_in = vec![Complex::zero(); len];
+    let mut buffer_out = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_with_scratch(&mut buffer, &mut scratch);
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut scratch);
     });
 }
 fn bench_planned_f64(b: &mut Bencher, len: usize) {
@@ -54,10 +55,11 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
-    let mut buffer = vec![Complex::zero(); len];
+    let mut buffer_in = vec![Complex::zero(); len];
+    let mut buffer_out = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_with_scratch(&mut buffer, &mut scratch);
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut scratch);
     });
 }
 
@@ -232,67 +234,29 @@ fn wasm_simd_prime_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 
 fn wasm_simd_prime_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
 fn wasm_simd_prime_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
 
-// Powers of 2
-fn wasm_simd_planned32_p2_00000064(b: &mut Bencher) {
-    bench_planned_f32(b, 64);
-}
-fn wasm_simd_planned32_p2_00000128(b: &mut Bencher) {
-    bench_planned_f32(b, 128);
-}
-fn wasm_simd_planned32_p2_00000256(b: &mut Bencher) {
-    bench_planned_f32(b, 256);
-}
-fn wasm_simd_planned32_p2_00000512(b: &mut Bencher) {
-    bench_planned_f32(b, 512);
-}
-fn wasm_simd_planned32_p2_00001024(b: &mut Bencher) {
-    bench_planned_f32(b, 1024);
-}
-fn wasm_simd_planned32_p2_00002048(b: &mut Bencher) {
-    bench_planned_f32(b, 2048);
-}
-fn wasm_simd_planned32_p2_00004096(b: &mut Bencher) {
-    bench_planned_f32(b, 4096);
-}
-fn wasm_simd_planned32_p2_00016384(b: &mut Bencher) {
-    bench_planned_f32(b, 16384);
-}
-fn wasm_simd_planned32_p2_00065536(b: &mut Bencher) {
-    bench_planned_f32(b, 65536);
-}
-fn wasm_simd_planned32_p2_01048576(b: &mut Bencher) {
-    bench_planned_f32(b, 1048576);
-}
+fn bench_groups(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("wasm_planned64_p2");
 
-fn wasm_simd_planned64_p2_00000064(b: &mut Bencher) {
-    bench_planned_f64(b, 64);
-}
-fn wasm_simd_planned64_p2_00000128(b: &mut Bencher) {
-    bench_planned_f64(b, 128);
-}
-fn wasm_simd_planned64_p2_00000256(b: &mut Bencher) {
-    bench_planned_f64(b, 256);
-}
-fn wasm_simd_planned64_p2_00000512(b: &mut Bencher) {
-    bench_planned_f64(b, 512);
-}
-fn wasm_simd_planned64_p2_00001024(b: &mut Bencher) {
-    bench_planned_f64(b, 1024);
-}
-fn wasm_simd_planned64_p2_00002048(b: &mut Bencher) {
-    bench_planned_f64(b, 2048);
-}
-fn wasm_simd_planned64_p2_00004096(b: &mut Bencher) {
-    bench_planned_f64(b, 4096);
-}
-fn wasm_simd_planned64_p2_00016384(b: &mut Bencher) {
-    bench_planned_f64(b, 16384);
-}
-fn wasm_simd_planned64_p2_00065536(b: &mut Bencher) {
-    bench_planned_f64(b, 65536);
-}
-fn wasm_simd_planned64_p2_01048576(b: &mut Bencher) {
-    bench_planned_f64(b, 1048576);
+        let base_len = 32;
+        for k in 1..11 {
+            let len = base_len * 4usize.pow(k);
+            group.bench_with_input(BenchmarkId::new("planned", len), &len, |b, _| {
+                bench_planned_f64(b, len);
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("wasm_planned32_p2");
+
+        let base_len = 32;
+        for k in 1..11 {
+            let len = base_len * 4usize.pow(k);
+            group.bench_with_input(BenchmarkId::new("planned", len), &len, |b, _| {
+                bench_planned_f32(b, len);
+            });
+        }
+    }
 }
 
 // Powers of 7
@@ -467,26 +431,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         wasm_simd_prime_butterfly64_23,
         wasm_simd_prime_butterfly64_29,
         wasm_simd_prime_butterfly64_31,
-        wasm_simd_planned32_p2_00000064,
-        wasm_simd_planned32_p2_00000128,
-        wasm_simd_planned32_p2_00000256,
-        wasm_simd_planned32_p2_00000512,
-        wasm_simd_planned32_p2_00001024,
-        wasm_simd_planned32_p2_00002048,
-        wasm_simd_planned32_p2_00004096,
-        wasm_simd_planned32_p2_00016384,
-        wasm_simd_planned32_p2_00065536,
-        wasm_simd_planned32_p2_01048576,
-        wasm_simd_planned64_p2_00000064,
-        wasm_simd_planned64_p2_00000128,
-        wasm_simd_planned64_p2_00000256,
-        wasm_simd_planned64_p2_00000512,
-        wasm_simd_planned64_p2_00001024,
-        wasm_simd_planned64_p2_00002048,
-        wasm_simd_planned64_p2_00004096,
-        wasm_simd_planned64_p2_00016384,
-        wasm_simd_planned64_p2_00065536,
-        wasm_simd_planned64_p2_01048576,
         wasm_simd_planned32_p7_00343,
         wasm_simd_planned32_p7_02401,
         wasm_simd_planned32_p7_16807,
@@ -527,6 +471,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, bench_groups
 }
 criterion_main!(benches);
