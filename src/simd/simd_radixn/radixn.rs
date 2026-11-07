@@ -21,50 +21,27 @@ use std::sync::Arc;
 use num_complex::Complex;
 
 use crate::array_utils::{
-    TransposeFactor, reverse_remainders, workaround_transmute, workaround_transmute_mut,
+    ArcSlice, TransposeFactor, choose_scratch, reverse_remainders, workaround_transmute,
+    workaround_transmute_mut,
 };
-use crate::common::{FftNum, RadixFactor};
-use crate::simd::parallel_fft::ParallelFft;
-use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
-use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
+use crate::common::FftNum;
 use crate::simd::simd_vector::SimdVector;
 use crate::{Fft, FftDirection};
 
-/// The per-layer cross-FFT kernels, holding whatever precomputed state each radix needs.
-pub enum InternalRadixFactor<V: SimdVector> {
-    Factor2(V::Butterfly2),
-    Factor3(V::Butterfly3),
-    Factor4(V::Butterfly4),
-    Factor5(V::Butterfly5),
-    Factor6(V::Butterfly6),
-    Factor7(V::Butterfly7),
-}
-
-impl<V: SimdVector> InternalRadixFactor<V> {
-    fn radix(&self) -> usize {
-        match self {
-            InternalRadixFactor::Factor2(_) => 2,
-            InternalRadixFactor::Factor3(_) => 3,
-            InternalRadixFactor::Factor4(_) => 4,
-            InternalRadixFactor::Factor5(_) => 5,
-            InternalRadixFactor::Factor6(_) => 6,
-            InternalRadixFactor::Factor7(_) => 7,
-        }
-    }
-}
+use super::{
+    cross_layer::{BaseLayer, CrossLayer, LayerFactory},
+    radix_factor::RadixFactor,
+    transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose},
+};
 
 /// FFT algorithm for lengths that factor into small radixes.
 /// This is generic over SIMD instruction set and is designed to be embedded into a
 /// feature-specific struct (such as SseRadixN or NeonRadixN), and not created directly.
-pub struct SimdRadixN<V: SimdVector, T> {
-    twiddles: Box<[V]>,
-
-    base_fft: Arc<dyn Fft<T>>,
-    base_len: usize,
-
+pub struct SimdRadixN<V: SimdVector, T: FftNum> {
     transpose_algorithm: TransposeAlgorithm,
-    butterflies: Box<[InternalRadixFactor<V>]>,
+    cross_ffts: Arc<dyn CrossLayer<V, T>>,
 
+    base_len: usize,
     len: usize,
     direction: FftDirection,
 
@@ -75,7 +52,12 @@ pub struct SimdRadixN<V: SimdVector, T> {
 
 impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
     /// Constructs a SimdRadixN which computes FFTs of length `factor_product * base_fft.len()`.
-    pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
+    #[inline(always)]
+    pub fn new(
+        factors: &[RadixFactor],
+        base_fft: Arc<dyn Fft<T>>,
+        layer_factory: impl LayerFactory<V, T>,
+    ) -> Self {
         // Internal sanity check: Make sure that the vector's scalar type is T.
         // This struct has two generic parameters V and T, but T must always be V's scalar type,
         // and they are only kept separate to help work around the lack of specialization.
@@ -83,10 +65,8 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
         let base_len = base_fft.len();
         let direction = base_fft.fft_direction();
-        let complex_per_vector = V::COMPLEX_PER_VECTOR;
 
         // set up our cross FFT butterfly instances. simultaneously, compute the number of twiddles
-        let mut butterflies = Vec::with_capacity(factors.len());
         let mut cross_fft_len = base_len;
         let mut twiddle_count = 0;
 
@@ -94,31 +74,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             // Twiddles are stored a vector at a time, so a layer needs one chunk per vector column.
             // A column count that isn't a whole number of vectors gets one more chunk for the
             // partial column, of which only the first twiddle is used.
-            twiddle_count += cross_fft_len.div_ceil(complex_per_vector) * (factor.radix() - 1);
-
-            butterflies.push(unsafe {
-                match factor {
-                    RadixFactor::Factor2 => {
-                        InternalRadixFactor::Factor2(V::make_butterfly2(direction))
-                    }
-                    RadixFactor::Factor3 => {
-                        InternalRadixFactor::Factor3(V::make_butterfly3(direction))
-                    }
-                    RadixFactor::Factor4 => {
-                        InternalRadixFactor::Factor4(V::make_butterfly4(direction))
-                    }
-                    RadixFactor::Factor5 => {
-                        InternalRadixFactor::Factor5(V::make_butterfly5(direction))
-                    }
-                    RadixFactor::Factor6 => {
-                        InternalRadixFactor::Factor6(V::make_butterfly6(direction))
-                    }
-                    RadixFactor::Factor7 => {
-                        InternalRadixFactor::Factor7(V::make_butterfly7(direction))
-                    }
-                }
-            });
-
+            twiddle_count += cross_fft_len.div_ceil(V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
             cross_fft_len *= factor.radix();
         }
         let len = cross_fft_len;
@@ -168,15 +124,15 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         // is a whole vector of columns, so each entry is a twiddle chunk rather than one twiddle.
         let mut twiddle_factors: Vec<V> = Vec::with_capacity(twiddle_count);
         let mut cross_fft_len = base_len;
-        for factor in factors {
-            let num_vector_columns = cross_fft_len.div_ceil(complex_per_vector);
+        for factor in factors.iter() {
+            let num_vector_columns = cross_fft_len.div_ceil(V::COMPLEX_PER_VECTOR);
             cross_fft_len *= factor.radix();
 
             for i in 0..num_vector_columns {
                 for k in 1..factor.radix() {
                     unsafe {
                         twiddle_factors.push(V::make_mixedradix_twiddle_chunk(
-                            i * complex_per_vector,
+                            i * V::COMPLEX_PER_VECTOR,
                             k,
                             cross_fft_len,
                             direction,
@@ -185,27 +141,50 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                 }
             }
         }
+        let twiddle_factors = Arc::from(twiddle_factors);
 
         // figure out how much scratch space we need to request from callers
         let base_inplace_scratch = base_fft.get_inplace_scratch_len();
         // the in-place path transposes into its own scratch and runs the base out of place from
         // there back into the caller's buffer, so it needs the base's out-of-place scratch on top
-        let inplace_scratch_len = len + base_fft.get_outofplace_scratch_len();
+        let inplace_scratch_len = if base_inplace_scratch > len {
+            len
+        } else {
+            len + base_inplace_scratch
+        };
         let outofplace_scratch_len = if base_inplace_scratch > len {
             base_inplace_scratch
         } else {
             0
         };
 
+        // Build our tree of child FFTs
+        let mut cross_ffts = Arc::new(BaseLayer(base_fft)) as Arc<dyn CrossLayer<V, T>>;
+        let mut cross_fft_len = base_len;
+        let mut twiddle_start = 0;
+        for factor in factors {
+            let twiddle_len = cross_fft_len.div_ceil(V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
+            let twiddle_end = twiddle_start + twiddle_len;
+            cross_fft_len *= factor.radix();
+
+            let layer_twiddles =
+                ArcSlice::new(Arc::clone(&twiddle_factors), twiddle_start..twiddle_end);
+            cross_ffts = layer_factory.construct_layer(
+                *factor,
+                cross_ffts,
+                cross_fft_len,
+                layer_twiddles,
+                direction,
+            );
+
+            twiddle_start = twiddle_end;
+        }
+
         Self {
-            twiddles: twiddle_factors.into_boxed_slice(),
-
-            base_fft,
-            base_len,
-
             transpose_algorithm,
-            butterflies: butterflies.into_boxed_slice(),
+            cross_ffts,
 
+            base_len,
             len,
             direction,
 
@@ -270,50 +249,6 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         }
     }
 
-    /// The stack of in-place cross-FFT layers, run after the base FFTs.
-    #[inline(always)]
-    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
-        unsafe {
-            let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
-
-            let mut cross_fft_len = self.base_len;
-            let mut layer_twiddles: &[V] = &self.twiddles;
-
-            for factor in self.butterflies.iter() {
-                let num_columns = cross_fft_len;
-                cross_fft_len *= factor.radix();
-
-                // Dispatch once per layer rather than once per chunk, so each layer runs a single
-                // monomorphized loop over its chunks.
-                match factor {
-                    InternalRadixFactor::Factor2(butterfly) => {
-                        cross_layer_chunks::<V, 2>(out, layer_twiddles, num_columns, butterfly)
-                    }
-                    InternalRadixFactor::Factor3(butterfly) => {
-                        cross_layer_chunks::<V, 3>(out, layer_twiddles, num_columns, butterfly)
-                    }
-                    InternalRadixFactor::Factor4(butterfly) => {
-                        cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, butterfly)
-                    }
-                    InternalRadixFactor::Factor5(butterfly) => {
-                        cross_layer_chunks::<V, 5>(out, layer_twiddles, num_columns, butterfly)
-                    }
-                    InternalRadixFactor::Factor6(butterfly) => {
-                        cross_layer_chunks::<V, 6>(out, layer_twiddles, num_columns, butterfly)
-                    }
-                    InternalRadixFactor::Factor7(butterfly) => {
-                        cross_layer_chunks::<V, 7>(out, layer_twiddles, num_columns, butterfly)
-                    }
-                }
-
-                // skip past all the twiddle factors used in this layer
-                let twiddle_offset =
-                    num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
-                layer_twiddles = &layer_twiddles[twiddle_offset..];
-            }
-        }
-    }
-
     #[inline(always)]
     pub fn process_single_immutable(
         &self,
@@ -322,8 +257,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         scratch: &mut [Complex<T>],
     ) {
         self.transpose(input, output);
-        self.base_fft.process_with_scratch(output, scratch);
-        unsafe { self.cross_ffts(output) };
+        unsafe { self.cross_ffts.process_layer(output, scratch) };
     }
 
     #[inline(always)]
@@ -334,24 +268,22 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         scratch: &mut [Complex<T>],
     ) {
         self.transpose(input, output);
-        // the input is free once the transpose is done, so use it as base scratch
-        // when we weren't handed any of our own
-        let base_scratch = if !scratch.is_empty() { scratch } else { input };
-        self.base_fft.process_with_scratch(output, base_scratch);
-        unsafe { self.cross_ffts(output) };
+        unsafe {
+            self.cross_ffts
+                .process_layer(output, choose_scratch(input, scratch))
+        };
     }
 
     #[inline(always)]
     pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
         self.transpose(buffer, transposed);
-        // Run the base out of place, from the scratch back into the caller's chunk.
-        // The cross layers are then in place on the chunk, and the whole thing ends
-        // where the caller wants it without a final copy.
-        self.base_fft
-            .process_outofplace_with_scratch(transposed, buffer, inner_scratch);
-        unsafe { self.cross_ffts(buffer) };
+        unsafe {
+            self.cross_ffts
+                .process_layer_outofplace(transposed, buffer, inner_scratch)
+        };
     }
+
     #[inline(always)]
     pub fn get_inplace_scratch_len(&self) -> usize {
         self.inplace_scratch_len
@@ -371,156 +303,6 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
     #[inline(always)]
     pub fn fft_direction(&self) -> FftDirection {
         self.direction
-    }
-}
-
-/// Run `cross_layer` over every chunk of `data`, each `num_columns * RADIX` long.
-///
-/// This is `chunks_exact_mut` without the divide it does to find the chunk count. At short lengths
-/// that one divide per layer is a measurable share of the whole FFT.
-#[inline(always)]
-pub unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize>(
-    data: &mut [Complex<V::ScalarType>],
-    twiddles: &[V],
-    num_columns: usize,
-    butterfly: &impl ParallelFft<V, RADIX>,
-) {
-    unsafe {
-        let chunk_len = num_columns * RADIX;
-        let mut rest = data;
-        while rest.len() >= chunk_len {
-            let (chunk, tail) = rest.split_at_mut(chunk_len);
-            cross_layer::<V, RADIX>(chunk, twiddles, num_columns, butterfly);
-            rest = tail;
-        }
-        debug_assert!(rest.is_empty());
-    }
-}
-
-// It would be ideal to declare gather_and_twiddle() as a lambda and use std::array::from_fn inside,
-// but that approach failed to inline on wasm simd, causing a horrible performance regression
-#[inline(always)]
-unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
-    data: &impl SimdComplexArray<V>,
-    twiddles: &[V],
-    num_columns: usize,
-    idx: usize,
-    tw_base: usize,
-) -> [V; RADIX] {
-    unsafe {
-        let mut arr = [V::zero_vector(); RADIX];
-
-        // The row-0 twiddle is always 1, so it's neither stored nor applied.
-        arr[0] = data.load(idx);
-
-        for r in 1..RADIX {
-            let v = data.load(idx + r * num_columns);
-            arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
-        }
-        arr
-    }
-}
-
-/// One cross-FFT layer: for each vector of columns, gather RADIX rows strided by `num_columns`,
-/// apply the twiddles, run the column butterfly, scatter back.
-///
-/// Unrolled two vectors at a time, which is what the SIMD Radix4's `butterfly_4` does and is what
-/// gets the two independent dependency chains needed to keep the FMA pipeline busy.
-#[inline(always)]
-pub unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
-    mut data: impl SimdComplexArrayMut<V>,
-    twiddles: &[V],
-    num_columns: usize,
-    butterfly: &impl ParallelFft<V, RADIX>,
-) {
-    unsafe {
-        let complex_per_vector = V::COMPLEX_PER_VECTOR;
-        // the whole vector columns, and then the column an inexact count leaves over
-        let num_vector_columns = num_columns / complex_per_vector;
-        let partial_columns = num_columns % complex_per_vector;
-        let tw_stride = RADIX - 1;
-
-        // A vector holds one or two complex numbers, so the leftover is at most a single column
-        debug_assert!(partial_columns <= 1);
-        debug_assert!(twiddles.len() >= num_columns.div_ceil(complex_per_vector) * tw_stride);
-
-        if V::RADIXN_CROSS_LAYER_UNROLL {
-            let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
-            for i in 0..unroll_count {
-                let vcol = i * 2;
-                let idx = vcol * complex_per_vector;
-
-                let a = gather_and_twiddle(&data, twiddles, num_columns, idx, vcol * tw_stride);
-                let b = gather_and_twiddle(
-                    &data,
-                    twiddles,
-                    num_columns,
-                    idx + complex_per_vector,
-                    (vcol + 1) * tw_stride,
-                );
-
-                let a = butterfly.parallel_fft(a);
-                let b = butterfly.parallel_fft(b);
-
-                for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
-                    data.store(*a_row, idx + r * num_columns);
-                    data.store(*b_row, idx + complex_per_vector + r * num_columns);
-                }
-            }
-
-            // an odd vector column count leaves one behind
-            if unroll_remainder > 0 {
-                let vcol = unroll_count * 2;
-                let idx = vcol * complex_per_vector;
-                let a = butterfly.parallel_fft(gather_and_twiddle(
-                    &data,
-                    twiddles,
-                    num_columns,
-                    idx,
-                    vcol * tw_stride,
-                ));
-                for (r, a_row) in a.iter().enumerate() {
-                    data.store(*a_row, idx + r * num_columns);
-                }
-            }
-        } else {
-            for i in 0..num_vector_columns {
-                let vcol = i;
-                let idx = vcol * complex_per_vector;
-
-                let a = gather_and_twiddle(&data, twiddles, num_columns, idx, vcol * tw_stride);
-
-                let a = butterfly.parallel_fft(a);
-
-                for (r, a_row) in a.iter().enumerate() {
-                    data.store(*a_row, idx + r * num_columns);
-                }
-            }
-        };
-
-        // A column count that isn't a whole number of vectors leaves a single column, so it can't be
-        // loaded or stored as a vector: a full load of the last row would run past the end of the
-        // buffer, and a full store would overwrite the first column of the next row. Load and store
-        // only the low half instead. The butterfly is the same one, since it works down the columns
-        // and the halves of a vector never interact. Only f32 ever gets here, since a vector holds a
-        // single complex f64 and a count of those is always exact.
-        if partial_columns > 0 {
-            let vcol = num_vector_columns;
-            let idx = vcol * complex_per_vector;
-            let tw_base = vcol * tw_stride;
-            let rows: [V; RADIX] = std::array::from_fn(|r| {
-                let v: V = data.load1_lo(idx + r * num_columns);
-                if r == 0 {
-                    v
-                } else {
-                    V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1))
-                }
-            });
-            let a = butterfly.parallel_fft(rows);
-            for (r, a_row) in a.iter().enumerate() {
-                data.store1_lo(*a_row, idx + r * num_columns);
-            }
-        }
     }
 }
 

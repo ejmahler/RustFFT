@@ -4,9 +4,9 @@ use num_complex::Complex;
 
 use crate::Fft;
 use crate::algorithm::butterflies::{Butterfly1, Butterfly3, Butterfly9, Butterfly27};
+use crate::algorithm::radixn::ScalarLayerFactory;
 use crate::array_utils::compute_logarithm;
-use crate::common::RadixFactor;
-use crate::simd::simd_radixn::SimdRadixN;
+use crate::simd::simd_radixn::{radix_factor::RadixFactor, radixn::SimdRadixN};
 use crate::{FftDirection, common::FftNum};
 
 /// FFT algorithm optimized for power-of-three sizes
@@ -50,7 +50,7 @@ impl<T: FftNum> Radix3<T> {
     /// Constructs a Radix3 instance which computes FFTs of length `3^k * base_fft.len()`
     fn new_with_base(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
         let factors = std::iter::repeat_n(RadixFactor::Factor3, k as usize).collect::<Vec<_>>();
-        Self(SimdRadixN::new(&factors, base_fft))
+        Self(SimdRadixN::new(&factors, base_fft, ScalarLayerFactory))
     }
 }
 boilerplate_scalar_fft!(Radix3, #[inline(always)]);

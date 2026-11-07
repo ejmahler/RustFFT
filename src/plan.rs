@@ -2,8 +2,7 @@ use num_integer::gcd;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::common::RadixFactor;
-use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
+use crate::simd::simd_radixn::radix_factor::RadixFactor;
 use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
 use crate::Fft;
@@ -14,6 +13,7 @@ use crate::FftPlannerAvx;
 use crate::FftPlannerFcma;
 use crate::FftPlannerNeon;
 use crate::FftPlannerSse;
+use crate::FftPlannerWasmSimd;
 
 use crate::math_utils::{PrimeFactors, split_cross_len};
 

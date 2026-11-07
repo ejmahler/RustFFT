@@ -2,16 +2,29 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::{Fft, FftNum, common::RadixFactor, simd::simd_radixn::SimdRadixN};
+use crate::{
+    Fft, FftDirection, FftNum,
+    array_utils::ArcSlice,
+    simd::simd_radixn::{
+        cross_layer::{
+            CrossLayer, LayerFactory, LayerInstance, boilerplate_simd_radixn,
+            boilerplate_simd_radixn_layer,
+        },
+        radix_factor::RadixFactor,
+        radixn::SimdRadixN,
+    },
+    simd::simd_vector::SimdVector,
+};
 
 pub struct RadixN<T: FftNum>(SimdRadixN<Complex<T>, T>);
 
 impl<T: FftNum> RadixN<T> {
     pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
-        Self(SimdRadixN::new(factors, base_fft))
+        Self(SimdRadixN::new(factors, base_fft, ScalarLayerFactory))
     }
 }
 boilerplate_scalar_fft!(RadixN, #[inline(always)]);
+boilerplate_simd_radixn!(ScalarLayerFactory, #[inline]);
 
 #[cfg(test)]
 mod unit_tests {
@@ -19,7 +32,7 @@ mod unit_tests {
 
     use num_complex::Complex;
 
-    use crate::{Fft, FftNum, simd::simd_radixn::test_bodies};
+    use crate::{Fft, FftNum, simd::simd_radixn::radixn::test_bodies};
 
     use super::*;
 

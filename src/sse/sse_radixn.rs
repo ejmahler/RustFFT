@@ -6,25 +6,42 @@
 
 use std::sync::Arc;
 
+use num_complex::Complex;
+
 use crate::{
-    Fft, FftNum,
-    common::RadixFactor,
-    simd::{simd_radixn::SimdRadixN, simd_vector::SimdVector},
+    Fft, FftDirection, FftNum,
+    array_utils::ArcSlice,
+    simd::{
+        simd_radixn::{
+            cross_layer::{
+                CrossLayer, LayerFactory, LayerInstance, boilerplate_simd_radixn,
+                boilerplate_simd_radixn_layer,
+            },
+            radix_factor::RadixFactor,
+            radixn::SimdRadixN,
+        },
+        simd_vector::SimdVector,
+    },
 };
 
 pub struct SseRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);
 
 impl<V: SimdVector, T: FftNum> SseRadixN<V, T> {
     #[allow(dead_code)]
+    #[target_feature(enable = "sse4.1")]
     pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
-        Self(SimdRadixN::new(factors, base_fft))
+        Self(SimdRadixN::new(factors, base_fft, SseLayerFactory))
     }
 }
 boilerplate_simd_fft!(SseRadixN, #[target_feature(enable = "sse4.1")]);
+boilerplate_simd_radixn!(SseLayerFactory, #[target_feature(enable = "sse4.1")]);
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::{Fft, common::RadixFactor, simd::simd_radixn::test_bodies};
+    use crate::{
+        Fft,
+        simd::simd_radixn::{radix_factor::RadixFactor, radixn::test_bodies},
+    };
     use std::{
         arch::x86_64::{__m128, __m128d},
         sync::Arc,
@@ -32,11 +49,12 @@ mod unit_tests {
 
     use super::*;
 
-    fn new_fn<V: SimdVector + 'static>(
+    fn new_fn<V: SimdVector>(
         factors: &[RadixFactor],
         base_fft: Arc<dyn Fft<V::ScalarType>>,
     ) -> Arc<dyn Fft<V::ScalarType>> {
-        Arc::new(SseRadixN::<V, V::ScalarType>::new(factors, base_fft))
+        assert!(is_x86_feature_detected!("sse4.1"));
+        unsafe { Arc::new(SseRadixN::<V, V::ScalarType>::new(factors, base_fft)) }
     }
 
     #[test]

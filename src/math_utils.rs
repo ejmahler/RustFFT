@@ -1,6 +1,6 @@
 use num_traits::{One, PrimInt, Zero};
 
-use crate::common::RadixFactor;
+use crate::simd::simd_radixn::radix_factor::RadixFactor;
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
     let test_exponents: Vec<u64> = distinct_prime_factors(prime - 1)

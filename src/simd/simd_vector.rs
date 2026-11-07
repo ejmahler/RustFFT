@@ -24,7 +24,7 @@ use crate::simd::parallel_fft::ParallelFft;
 /// Safety: every method here requires the current machine to support the backend's SIMD
 /// instruction set.
 #[allow(dead_code)]
-pub trait SimdVector: Copy + Send + Sync + Sized {
+pub trait SimdVector: Copy + Send + Sync + Sized + 'static {
     const COMPLEX_PER_VECTOR: usize;
     const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
 

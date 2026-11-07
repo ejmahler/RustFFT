@@ -4,13 +4,11 @@ use num_complex::Complex;
 
 use crate::{
     Fft, FftDirection, FftNum,
-    algorithm::butterflies::{
-        Butterfly1, Butterfly2, Butterfly4, Butterfly8, Butterfly16, Butterfly32,
+    algorithm::{
+        butterflies::{Butterfly1, Butterfly2, Butterfly4, Butterfly8, Butterfly16, Butterfly32},
+        radixn::ScalarLayerFactory,
     },
-    simd::{
-        simd_radix4::{SimdRadix4, boilerplate_simd_radix4},
-        simd_vector::SimdVector,
-    },
+    simd::simd_radixn::radix4::SimdRadix4,
 };
 
 /// FFT algorithm optimized for power-of-two sizes
@@ -26,7 +24,7 @@ use crate::{
 /// let fft = Radix4::new(4096, FftDirection::Forward);
 /// fft.process(&mut buffer);
 /// ~~~
-pub struct Radix4<T: FftNum>(SimdRadix4<Complex<T>, T, ScalarRadix4Layer<Complex<T>, T>>);
+pub struct Radix4<T: FftNum>(SimdRadix4<Complex<T>, T>);
 impl<T: FftNum> Radix4<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     pub fn new(len: usize, direction: FftDirection) -> Self {
@@ -57,10 +55,9 @@ impl<T: FftNum> Radix4<T> {
 
     /// Constructs a Radix4 instance which computes FFTs of length `4^k * base_fft.len()`
     pub fn new_with_base(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
-        Self(SimdRadix4::new(k, base_fft, ScalarRadix4Layer::new))
+        Self(SimdRadix4::new(k, base_fft, ScalarLayerFactory))
     }
 }
-boilerplate_simd_radix4!(Radix4, ScalarRadix4Layer, #[inline]);
 boilerplate_scalar_fft!(Radix4, #[inline(always)]);
 
 #[cfg(test)]
@@ -72,7 +69,7 @@ mod unit_tests {
     use crate::{
         Fft, FftDirection, FftNum,
         algorithm::Radix4,
-        simd::simd_radix4::test_bodies,
+        simd::simd_radixn::radix4::test_bodies,
         test_utils::{check_fft_algorithm, construct_base},
     };
 
