@@ -37,6 +37,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     type Butterfly5: ParallelFft<Self, 5>;
     type Butterfly6: ParallelFft<Self, 6>;
     type Butterfly7: ParallelFft<Self, 7>;
+    type Butterfly8: ParallelFft<Self, 8>;
 
     unsafe fn zero_vector() -> Self;
 
@@ -98,4 +99,5 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5;
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6;
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7;
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8;
 }

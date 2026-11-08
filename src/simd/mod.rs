@@ -1,4 +1,5 @@
 pub mod simd_array;
+pub mod simd_butterfly8;
 
 pub mod simd_radix4;
 pub mod simd_radixn;

@@ -1707,6 +1707,36 @@ pub struct NeonF32Butterfly8<T> {
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
     .bf4
     .direction);
+/// `NeonF32Butterfly8`'s two-at-a-time kernel, for RadixN's radix-8 layers.
+pub struct NeonF32ParallelButterfly8(NeonF32Butterfly8<f32>);
+impl NeonF32ParallelButterfly8 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self(NeonF32Butterfly8::new(direction))
+    }
+}
+impl ParallelFft<float32x4_t, 8> for NeonF32ParallelButterfly8 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float32x4_t; 8]) -> [float32x4_t; 8] {
+        unsafe { self.0.perform_parallel_fft_direct(data) }
+    }
+}
+
+/// `NeonF64Butterfly8`'s kernel, for RadixN's radix-8 layers.
+pub struct NeonF64ParallelButterfly8(NeonF64Butterfly8<f64>);
+impl NeonF64ParallelButterfly8 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self(NeonF64Butterfly8::new(direction))
+    }
+}
+impl ParallelFft<float64x2_t, 8> for NeonF64ParallelButterfly8 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float64x2_t; 8]) -> [float64x2_t; 8] {
+        unsafe { self.0.perform_fft_direct(data) }
+    }
+}
+
 impl<T: FftNum> NeonF32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {

@@ -25,6 +25,7 @@ impl<T: FftNum> SimdVector for Complex<T> {
     type Butterfly5 = ScalarParallelButterfly5<T>;
     type Butterfly6 = ScalarParallelButterfly6<T>;
     type Butterfly7 = ScalarParallelButterfly7<T>;
+    type Butterfly8 = crate::simd::simd_butterfly8::SimdParallelButterfly8<Self>;
 
     unsafe fn zero_vector() -> Self {
         Zero::zero()
@@ -126,5 +127,9 @@ impl<T: FftNum> SimdVector for Complex<T> {
     }
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         Self::Butterfly7::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        unsafe { crate::simd::simd_butterfly8::SimdParallelButterfly8::new(direction) }
     }
 }

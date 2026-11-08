@@ -150,6 +150,7 @@ impl SimdVector for WasmVector64 {
     type Butterfly5 = WasmSimdF64ParallelButterfly5;
     type Butterfly6 = WasmSimdF64ParallelButterfly6;
     type Butterfly7 = WasmSimdF64ParallelButterfly7;
+    type Butterfly8 = crate::simd::simd_butterfly8::SimdParallelButterfly8<Self>;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -270,6 +271,10 @@ impl SimdVector for WasmVector64 {
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         unsafe { Self::Butterfly7::new(direction) }
     }
+    #[inline(always)]
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        unsafe { crate::simd::simd_butterfly8::SimdParallelButterfly8::new(direction) }
+    }
 }
 
 impl SimdVector for WasmVector32 {
@@ -284,6 +289,7 @@ impl SimdVector for WasmVector32 {
     type Butterfly5 = WasmSimdF32ParallelButterfly5;
     type Butterfly6 = WasmSimdF32ParallelButterfly6;
     type Butterfly7 = WasmSimdF32ParallelButterfly7;
+    type Butterfly8 = crate::simd::simd_butterfly8::SimdParallelButterfly8<Self>;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -411,6 +417,10 @@ impl SimdVector for WasmVector32 {
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         unsafe { Self::Butterfly7::new(direction) }
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        unsafe { crate::simd::simd_butterfly8::SimdParallelButterfly8::new(direction) }
     }
 }
 

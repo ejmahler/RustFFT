@@ -19,6 +19,7 @@ use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADIXN_FACTOR: usize = 7; // the largest factor a RadixN layer can handle
+const MIN_RADIX8_BITS: u32 = 16; // from 2^16 on, radix-8 layers beat radix-4 ones
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
@@ -658,6 +659,10 @@ impl<T: FftNum> FftPlannerNeon<T> {
         assert!(factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2);
 
         let p2 = factors.get_power_of_two();
+        let is_f32 = TypeId::of::<T>() == TypeId::of::<f32>();
+        if is_f32 && factors.get_power_of_three() == 0 && p2 >= MIN_RADIX8_BITS {
+            return self.design_radix8(p2);
+        }
         let base_len: usize = if factors.get_power_of_three() == 0 {
             // pure power of 2
             match p2 {
@@ -702,6 +707,27 @@ impl<T: FftNum> FftPlannerNeon<T> {
 
         let base_fft = self.design_fft_for_len(base_len);
         Arc::new(Recipe::Radix4 { k, base_fft })
+    }
+
+    /// A butterfly 32 base under radix-8 layers, for powers of two big enough that the passes
+    /// over memory cost more than the butterflies: one radix-8 layer replaces one and a half
+    /// radix-4 layers. A leftover factor of 2 or 4 goes in first, where the columns are short.
+    fn design_radix8(&mut self, p2: u32) -> Arc<Recipe> {
+        let cross_bits = p2 - 5;
+        let mut factors = match cross_bits % 3 {
+            1 => vec![RadixFactor::Factor2],
+            2 => vec![RadixFactor::Factor4],
+            _ => Vec::new(),
+        };
+        factors.extend(std::iter::repeat_n(
+            RadixFactor::Factor8,
+            cross_bits as usize / 3,
+        ));
+        let base_fft = self.design_fft_for_len(32);
+        Arc::new(Recipe::RadixN {
+            factors: factors.into_boxed_slice(),
+            base_fft,
+        })
     }
 }
 
@@ -764,6 +790,20 @@ mod unit_tests {
             let plan = planner.design_fft_for_len(len);
             assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
+        }
+    }
+
+    #[test]
+    fn test_plan_neon_large_f32_power_of_two_uses_radix8() {
+        let mut planner = FftPlannerNeon::<f32>::new().unwrap();
+        for pow in 6..16 {
+            let plan = planner.design_fft_for_len(1 << pow);
+            assert!(matches!(*plan, Recipe::Radix4 { .. }), "2^{pow}: {plan:?}");
+        }
+        for pow in 16..24 {
+            let plan = planner.design_fft_for_len(1 << pow);
+            assert!(matches!(*plan, Recipe::RadixN { .. }), "2^{pow}: {plan:?}");
+            assert_eq!(plan.len(), 1 << pow);
         }
     }
 

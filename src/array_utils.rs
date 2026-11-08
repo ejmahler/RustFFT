@@ -539,6 +539,12 @@ pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> u
                     value = value / 7;
                 }
             }
+            RadixFactor::Factor8 => {
+                for _ in 0..f.count {
+                    result = (result * 8) + (value % 8);
+                    value /= 8;
+                }
+            }
         }
     }
     result

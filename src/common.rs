@@ -481,6 +481,8 @@ pub enum RadixFactor {
     Factor5,
     Factor6,
     Factor7,
+    #[cfg_attr(not(all(target_arch = "aarch64", feature = "neon")), allow(dead_code))]
+    Factor8,
 }
 impl RadixFactor {
     pub const fn radix(&self) -> usize {
@@ -492,6 +494,7 @@ impl RadixFactor {
             RadixFactor::Factor5 => 5,
             RadixFactor::Factor6 => 6,
             RadixFactor::Factor7 => 7,
+            RadixFactor::Factor8 => 8,
         }
     }
 }

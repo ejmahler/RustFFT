@@ -38,6 +38,7 @@ pub enum InternalRadixFactor<V: SimdVector> {
     Factor5(V::Butterfly5),
     Factor6(V::Butterfly6),
     Factor7(V::Butterfly7),
+    Factor8(V::Butterfly8),
 }
 
 impl<V: SimdVector> InternalRadixFactor<V> {
@@ -49,6 +50,7 @@ impl<V: SimdVector> InternalRadixFactor<V> {
             InternalRadixFactor::Factor5(_) => 5,
             InternalRadixFactor::Factor6(_) => 6,
             InternalRadixFactor::Factor7(_) => 7,
+            InternalRadixFactor::Factor8(_) => 8,
         }
     }
 }
@@ -115,6 +117,9 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                     }
                     RadixFactor::Factor7 => {
                         InternalRadixFactor::Factor7(V::make_butterfly7(direction))
+                    }
+                    RadixFactor::Factor8 => {
+                        InternalRadixFactor::Factor8(V::make_butterfly8(direction))
                     }
                 }
             });
@@ -244,6 +249,9 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                 RadixFactor::Factor7 => unsafe {
                     unrolled_transpose::<V, 7>(self.base_len, input, output)
                 },
+                RadixFactor::Factor8 => unsafe {
+                    unrolled_transpose::<V, 8>(self.base_len, input, output)
+                },
             },
             TransposeAlgorithm::TableTranspose(unroll_factor, reversed_columns) => {
                 match *unroll_factor {
@@ -264,6 +272,9 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                     },
                     RadixFactor::Factor7 => unsafe {
                         table_transpose::<V, 7>(self.base_len, reversed_columns, input, output)
+                    },
+                    RadixFactor::Factor8 => unsafe {
+                        table_transpose::<V, 8>(self.base_len, reversed_columns, input, output)
                     },
                 }
             }
@@ -303,6 +314,9 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                     }
                     InternalRadixFactor::Factor7(butterfly) => {
                         cross_layer_chunks::<V, 7>(out, layer_twiddles, num_columns, butterfly)
+                    }
+                    InternalRadixFactor::Factor8(butterfly) => {
+                        cross_layer_chunks::<V, 8>(out, layer_twiddles, num_columns, butterfly)
                     }
                 }
 
@@ -543,6 +557,7 @@ pub mod test_bodies {
         RadixFactor::Factor5,
         RadixFactor::Factor6,
         RadixFactor::Factor7,
+        RadixFactor::Factor8,
     ];
 
     /// Every empty, one-factor and two-factor recipe over each of `bases`, both directions.
