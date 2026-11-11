@@ -2,7 +2,6 @@ use num_integer::gcd;
 
 use crate::algorithm::{
     Dft, GoodThomasAlgorithm, GoodThomasAlgorithmSmall, MixedRadix, MixedRadixSmall,
-    RadersAlgorithm,
 };
 use crate::math_utils::PrimeFactor;
 use crate::wasm_simd::*;
@@ -10,6 +9,7 @@ use crate::{Fft, FftDirection, FftNum, fft_cache::FftCache, math_utils::PrimeFac
 use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 use super::wasm_simd_bluesteins::WasmSimdBluesteins;
+use super::wasm_simd_raders::WasmSimdRaders;
 use super::wasm_simd_radix4::WasmSimdRadix4;
 use super::wasm_simd_vector::{WasmVector32, WasmVector64};
 
@@ -411,7 +411,13 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             }
             Recipe::RadersAlgorithm { inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdRaders::<WasmVector32, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdRaders::<WasmVector64, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);

@@ -7,6 +7,7 @@ mod fcma_vector;
 pub mod fcma_butterflies;
 pub mod fcma_bluesteins;
 pub mod fcma_prime_butterflies;
+pub mod fcma_raders;
 pub mod fcma_radix4;
 pub mod fcma_radixn;
 
