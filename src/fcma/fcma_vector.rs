@@ -251,6 +251,18 @@ impl SimdVector for FcmaVector64 {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        unsafe {
+            // The rot90 step of mul_complex adds (-bd, bc), and conjugating the left input flips
+            // the sign of both, which is exactly what rot270 adds. So this costs the same as
+            // mul_complex.
+            let zero = vmovq_n_f64(0.0);
+            let temp = vcmlaq_f64(zero, left.0, right.0);
+            Self(vcmlaq_rot270_f64(temp, left.0, right.0))
+        }
+    }
+
+    #[inline(always)]
     unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
         Self::Butterfly2::new(direction)
     }
@@ -404,6 +416,17 @@ impl SimdVector for FcmaVector32 {
             let zero = vmovq_n_f32(0.0);
             let temp = vcmlaq_f32(zero, left.0, right.0);
             Self(vcmlaq_rot90_f32(temp, left.0, right.0))
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        unsafe {
+            // See the f64 version: rot270 adds the rot90 term with both signs flipped, which is
+            // the same as conjugating the left input, so this costs the same as mul_complex.
+            let zero = vmovq_n_f32(0.0);
+            let temp = vcmlaq_f32(zero, left.0, right.0);
+            Self(vcmlaq_rot270_f32(temp, left.0, right.0))
         }
     }
 

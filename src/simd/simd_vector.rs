@@ -13,6 +13,18 @@ use crate::FftDirection;
 use crate::common::FftNum;
 use crate::simd::parallel_fft::ParallelFft;
 
+/// The two ways of writing the pairwise multiply loops in `simd_mul_slice.rs`. Which one is faster
+/// depends on the backend and the precision, and doesn't follow from anything else the vector
+/// type says about itself, so each vector type picks one with `SimdVector::MUL_SLICE_ALGORITHM`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MulSliceAlgorithm {
+    /// A plain loop over complex numbers, which LLVM autovectorizes into deinterleaving loads
+    /// where the backend has them.
+    Autovectorize,
+    /// A vector at a time with `mul_complex`, keeping the data interleaved.
+    Interleaved,
+}
+
 /// The vector operations the shared SIMD algorithms need from a backend's vector type.
 ///
 /// Radix 2 and 4 are vector-generic in every backend, so they map straight onto the backend's
@@ -27,6 +39,10 @@ use crate::simd::parallel_fft::ParallelFft;
 pub trait SimdVector: Copy + Send + Sync + Sized {
     const COMPLEX_PER_VECTOR: usize;
     const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
+
+    /// How the pairwise multiply loops of Bluestein's and Rader's are written for this vector type.
+    /// See `MulSliceAlgorithm`.
+    const MUL_SLICE_ALGORITHM: MulSliceAlgorithm = MulSliceAlgorithm::Interleaved;
 
     /// The scalar this vector holds. Always the same type as the `T` of the algorithm using it.
     type ScalarType: FftNum;
@@ -82,6 +98,15 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     unsafe fn mul_complex(left: Self, right: Self) -> Self;
+
+    /// The same as `mul_complex`, except that `left` is conjugated first: the result is
+    /// `left.conj() * right`.
+    ///
+    /// Bluestein's and Rader's both need a product conjugated, and `(a * b).conj()` is
+    /// `a.conj() * b.conj()`, so storing the precomputed side pre-conjugated turns every one of
+    /// those into this operation. Every backend reaches it in the same instruction count as
+    /// `mul_complex`, or one more.
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self;
 
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X
     /// `COMPLEX_PER_VECTOR` times.

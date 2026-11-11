@@ -10,6 +10,7 @@ use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
 use crate::Fft;
 use crate::algorithm::*;
+use crate::sse::sse_bluesteins::SseBluesteins;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies;
 
@@ -438,7 +439,13 @@ impl<T: FftNum> FftPlannerSse<T> {
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(BluesteinsAlgorithm::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(SseBluesteins::<__m128, T>::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SseBluesteins::<__m128d, T>::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
         }
     }
