@@ -60,6 +60,10 @@ impl<T: FftNum> SimdVector for Complex<T> {
         a.neg()
     }
 
+    unsafe fn swap_complex(a: Self) -> Self {
+        Complex { re: a.im, im: a.re }
+    }
+
     unsafe fn add(a: Self, b: Self) -> Self {
         a + b
     }

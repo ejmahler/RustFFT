@@ -183,6 +183,10 @@ impl SimdVector for float64x2_t {
         unsafe { vnegq_f64(a) }
     }
     #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        unsafe { vextq_f64(a, a, 1) }
+    }
+    #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
         unsafe { vaddq_f64(a, b) }
     }
@@ -331,6 +335,10 @@ impl SimdVector for float32x4_t {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         unsafe { vnegq_f32(a) }
+    }
+    #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        unsafe { vrev64q_f32(a) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {

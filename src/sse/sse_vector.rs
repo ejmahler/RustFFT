@@ -183,6 +183,10 @@ impl SimdVector for __m128d {
         unsafe { _mm_xor_pd(a, _mm_set1_pd(-0.0)) }
     }
     #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        unsafe { _mm_shuffle_pd(a, a, 0x1) }
+    }
+    #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
         unsafe { _mm_add_pd(a, b) }
     }
@@ -326,6 +330,10 @@ impl SimdVector for __m128 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         unsafe { _mm_xor_ps(a, _mm_set1_ps(-0.0)) }
+    }
+    #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        unsafe { _mm_shuffle_ps(a, a, 0xB1) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {

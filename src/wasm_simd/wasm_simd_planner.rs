@@ -11,9 +11,14 @@ use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 use super::wasm_simd_radix4::WasmSimdRadix4;
 use super::wasm_simd_radixn::WasmSimdRadixN;
+use super::wasm_simd_stockham::WasmSimdStockham;
 use super::wasm_simd_vector::{WasmVector32, WasmVector64};
 use crate::common::RadixFactor;
 use crate::math_utils::split_cross_len;
+
+/// The shortest power of two computed with [`WasmSimdStockham`]. Below it the butterflies and radix 4
+/// plans are faster.
+const STOCKHAM_MIN_LEN: usize = 512;
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADIXN_FACTOR: usize = 7; // the largest factor a RadixN layer can handle
@@ -56,6 +61,9 @@ pub enum Recipe {
         factors: Box<[RadixFactor]>,
         base_fft: Arc<Recipe>,
     },
+    Stockham {
+        len: usize,
+    },
     Butterfly1,
     Butterfly2,
     Butterfly3,
@@ -80,6 +88,7 @@ impl Recipe {
         match self {
             Recipe::Dft(length) => *length,
             Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
+            Recipe::Stockham { len } => *len,
             Recipe::RadixN { factors, base_fft } => {
                 base_fft.len() * factors.iter().map(|f| f.radix()).product::<usize>()
             }
@@ -253,6 +262,17 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
                         as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
                     Arc::new(WasmSimdRadix4::<WasmVector64, T>::new(*k, base_fft))
+                        as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Stockham { len } => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdStockham::<WasmVector32, T>::new(*len, direction))
+                        as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdStockham::<WasmVector64, T>::new(*len, direction))
                         as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
@@ -445,6 +465,8 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
             fft_instance
+        } else if len.is_power_of_two() && len >= STOCKHAM_MIN_LEN {
+            Arc::new(Recipe::Stockham { len })
         } else if factors.is_prime() {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
@@ -735,12 +757,16 @@ mod unit_tests {
 
     #[wasm_bindgen_test]
     fn test_plan_sse_largepoweroftwo() {
-        // Powers of 2 above 6 should use Radix4
+        // Powers of 2 from 6 use Radix4, from 512 on Stockham
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-        for pow in 6..32 {
+        for pow in 6..9 {
+            let plan = planner.design_fft_for_len(1 << pow);
+            assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
+        }
+        for pow in 9..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
-            assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
+            assert_eq!(*plan, Recipe::Stockham { len });
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }

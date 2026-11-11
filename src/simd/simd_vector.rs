@@ -72,6 +72,28 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 
     // math ops
     unsafe fn neg(a: Self) -> Self;
+    /// Swaps the real and imaginary part of every complex number.
+    unsafe fn swap_complex(a: Self) -> Self;
+
+    /// `a + r * b`, where `r` is `-i` if `FORWARD` and `i` otherwise, given `rotation`: `(1, -1)`
+    /// if `FORWARD` and `(-1, 1)` otherwise.
+    #[inline(always)]
+    unsafe fn rotate_add<const FORWARD: bool>(a: Self, b: Self, rotation: Self) -> Self {
+        unsafe { Self::fmadd(a, Self::swap_complex(b), rotation) }
+    }
+
+    /// `a - r * b`, the counterpart of [`SimdVector::rotate_add`].
+    #[inline(always)]
+    unsafe fn rotate_sub<const FORWARD: bool>(a: Self, b: Self, rotation: Self) -> Self {
+        unsafe { Self::nmadd(a, Self::swap_complex(b), rotation) }
+    }
+
+    /// `value * twiddle`, the twiddle given both whole and as `(re, re)` and `(-im, im)` parts.
+    /// Implementations use whichever form suits them.
+    #[inline(always)]
+    unsafe fn mul_twiddle(value: Self, re: Self, im: Self, _twiddle: Self) -> Self {
+        unsafe { Self::fmadd(Self::mul(value, re), Self::swap_complex(value), im) }
+    }
     unsafe fn add(a: Self, b: Self) -> Self;
     unsafe fn sub(a: Self, b: Self) -> Self;
     unsafe fn mul(a: Self, b: Self) -> Self;

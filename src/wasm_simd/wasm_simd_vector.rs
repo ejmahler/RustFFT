@@ -193,6 +193,10 @@ impl SimdVector for WasmVector64 {
         Self(f64x2_neg(a.0))
     }
     #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        Self(i64x2_shuffle::<1, 0>(a.0, a.0))
+    }
+    #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
         Self(f64x2_add(a.0, b.0))
     }
@@ -334,6 +338,10 @@ impl SimdVector for WasmVector32 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         Self(f32x4_neg(a.0))
+    }
+    #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        Self(i32x4_shuffle::<1, 0, 3, 2>(a.0, a.0))
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {

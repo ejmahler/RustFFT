@@ -13,6 +13,7 @@ use crate::neon::neon_butterflies::*;
 use crate::neon::neon_prime_butterflies;
 use crate::neon::neon_radix4::NeonRadix4;
 use crate::neon::neon_radixn::NeonRadixN;
+use crate::neon::neon_stockham::NeonStockham;
 
 use crate::common::RadixFactor;
 use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
@@ -58,6 +59,9 @@ pub enum Recipe {
         factors: Box<[RadixFactor]>,
         base_fft: Arc<Recipe>,
     },
+    Stockham {
+        len: usize,
+    },
     Butterfly1,
     Butterfly2,
     Butterfly3,
@@ -82,6 +86,7 @@ impl Recipe {
         match self {
             Recipe::Dft(length) => *length,
             Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
+            Recipe::Stockham { len } => *len,
             Recipe::RadixN { factors, base_fft } => {
                 base_fft.len() * factors.iter().map(|f| f.radix()).product::<usize>()
             }
@@ -280,6 +285,17 @@ impl<T: FftNum> FftPlannerNeon<T> {
                     panic!("Not f32 or f64");
                 }
             }
+            Recipe::Stockham { len } => {
+                if id_t == id_f32 {
+                    Arc::new(NeonStockham::<float32x4_t, T>::new(*len, direction))
+                        as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonStockham::<float64x2_t, T>::new(*len, direction))
+                        as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
             Recipe::RadixN { factors, base_fft } => {
                 let base_fft = self.build_fft(base_fft, direction);
                 if id_t == id_f32 {
@@ -464,9 +480,21 @@ impl<T: FftNum> FftPlannerNeon<T> {
         }
     }
 
+    /// The shortest power of two computed with [`NeonStockham`]. Below it the butterflies and
+    /// radix 4 plans are faster.
+    fn stockham_min_len() -> usize {
+        if TypeId::of::<T>() == TypeId::of::<f32>() {
+            256
+        } else {
+            128
+        }
+    }
+
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
             fft_instance
+        } else if len.is_power_of_two() && len >= Self::stockham_min_len() {
+            Arc::new(Recipe::Stockham { len })
         } else if factors.is_prime() {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
@@ -757,13 +785,28 @@ mod unit_tests {
 
     #[test]
     fn test_plan_neon_largepoweroftwo() {
-        // Powers of 2 above 6 should use Radix4
+        // Powers of 2 from 128 on use Stockham
         let mut planner = FftPlannerNeon::<f64>::new().unwrap();
-        for pow in 6..32 {
+        let plan = planner.design_fft_for_len(64);
+        assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
+        for pow in 7..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
-            assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
+            assert_eq!(*plan, Recipe::Stockham { len });
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
+        }
+    }
+
+    #[test]
+    fn test_plan_neon_f32_power_of_two_uses_stockham() {
+        let mut planner = FftPlannerNeon::<f32>::new().unwrap();
+        for pow in 6..8 {
+            let plan = planner.design_fft_for_len(1 << pow);
+            assert!(matches!(*plan, Recipe::Radix4 { .. }), "2^{pow}: {plan:?}");
+        }
+        for pow in 8..24 {
+            let plan = planner.design_fft_for_len(1 << pow);
+            assert_eq!(*plan, Recipe::Stockham { len: 1 << pow });
         }
     }
 
