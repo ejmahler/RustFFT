@@ -18,7 +18,7 @@ impl<V: SimdVector, T: FftNum> NeonBluesteins<V, T> {
         Self(SimdBluesteins::new(len, inner_fft))
     }
 }
-boilerplate_simd_fft!(NeonBluesteins, #[inline(always)]);
+boilerplate_simd_fft!(NeonBluesteins, #[target_feature(enable = "neon")]);
 
 #[cfg(test)]
 mod unit_tests {

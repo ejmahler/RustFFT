@@ -18,7 +18,7 @@ impl<V: SimdVector, T: FftNum> NeonRaders<V, T> {
         Self(SimdRaders::new(inner_fft))
     }
 }
-boilerplate_simd_fft!(NeonRaders, #[inline(always)]);
+boilerplate_simd_fft!(NeonRaders, #[target_feature(enable = "neon")]);
 
 #[cfg(test)]
 mod unit_tests {
