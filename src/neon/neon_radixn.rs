@@ -20,7 +20,7 @@ impl<V: SimdVector, T: FftNum> NeonRadixN<V, T> {
         Self(SimdRadixN::new(factors, base_fft))
     }
 }
-boilerplate_simd_fft!(NeonRadixN, #[inline(always)]);
+boilerplate_simd_fft!(NeonRadixN, #[target_feature(enable = "neon")]);
 
 #[cfg(test)]
 mod unit_tests {

@@ -9,8 +9,10 @@ use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
 use crate::Fft;
 use crate::algorithm::*;
+use crate::neon::neon_bluesteins::NeonBluesteins;
 use crate::neon::neon_butterflies::*;
 use crate::neon::neon_prime_butterflies;
+use crate::neon::neon_raders::NeonRaders;
 use crate::neon::neon_radix4::NeonRadix4;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
@@ -433,11 +435,25 @@ impl<T: FftNum> FftPlannerNeon<T> {
             }
             Recipe::RadersAlgorithm { inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(NeonRaders::<float32x4_t, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonRaders::<float64x2_t, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(BluesteinsAlgorithm::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(NeonBluesteins::<float32x4_t, T>::new(*len, inner_fft))
+                        as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonBluesteins::<float64x2_t, T>::new(*len, inner_fft))
+                        as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
         }
     }

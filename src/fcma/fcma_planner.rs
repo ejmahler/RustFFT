@@ -8,8 +8,10 @@ use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
 use crate::Fft;
 use crate::algorithm::*;
+use crate::fcma::fcma_bluesteins::FcmaBluesteins;
 use crate::fcma::fcma_butterflies::*;
 use crate::fcma::fcma_prime_butterflies;
+use crate::fcma::fcma_raders::FcmaRaders;
 use crate::fcma::fcma_radix4::FcmaRadix4;
 use crate::fcma::fcma_vector::{FcmaVector32, FcmaVector64};
 
@@ -433,11 +435,25 @@ impl<T: FftNum> FftPlannerFcma<T> {
             }
             Recipe::RadersAlgorithm { inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(FcmaRaders::<FcmaVector32, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(FcmaRaders::<FcmaVector64, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(BluesteinsAlgorithm::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(FcmaBluesteins::<FcmaVector32, T>::new(*len, inner_fft))
+                        as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(FcmaBluesteins::<FcmaVector64, T>::new(*len, inner_fft))
+                        as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
         }
     }
