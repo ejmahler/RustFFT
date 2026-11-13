@@ -197,6 +197,34 @@ impl SimdVector for FcmaVector64 {
         unsafe { Self(vnegq_f64(a.0)) }
     }
     #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        unsafe { Self(vextq_f64(a.0, a.0, 1)) }
+    }
+    #[inline(always)]
+    unsafe fn rotate_add<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
+        unsafe {
+            if FORWARD {
+                Self(vcaddq_rot270_f64(a.0, b.0))
+            } else {
+                Self(vcaddq_rot90_f64(a.0, b.0))
+            }
+        }
+    }
+    #[inline(always)]
+    unsafe fn rotate_sub<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
+        unsafe {
+            if FORWARD {
+                Self(vcaddq_rot90_f64(a.0, b.0))
+            } else {
+                Self(vcaddq_rot270_f64(a.0, b.0))
+            }
+        }
+    }
+    #[inline(always)]
+    unsafe fn mul_twiddle(value: Self, _re: Self, _im: Self, twiddle: Self) -> Self {
+        unsafe { Self::mul_complex(twiddle, value) }
+    }
+    #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
         unsafe { Self(vaddq_f64(a.0, b.0)) }
     }
@@ -363,6 +391,34 @@ impl SimdVector for FcmaVector32 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         unsafe { Self(vnegq_f32(a.0)) }
+    }
+    #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        unsafe { Self(vrev64q_f32(a.0)) }
+    }
+    #[inline(always)]
+    unsafe fn rotate_add<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
+        unsafe {
+            if FORWARD {
+                Self(vcaddq_rot270_f32(a.0, b.0))
+            } else {
+                Self(vcaddq_rot90_f32(a.0, b.0))
+            }
+        }
+    }
+    #[inline(always)]
+    unsafe fn rotate_sub<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
+        unsafe {
+            if FORWARD {
+                Self(vcaddq_rot90_f32(a.0, b.0))
+            } else {
+                Self(vcaddq_rot270_f32(a.0, b.0))
+            }
+        }
+    }
+    #[inline(always)]
+    unsafe fn mul_twiddle(value: Self, _re: Self, _im: Self, twiddle: Self) -> Self {
+        unsafe { Self::mul_complex(twiddle, value) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
