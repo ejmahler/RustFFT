@@ -24,6 +24,75 @@ use crate::simd::simd_mul_slice::mul_complex_slice;
 use crate::simd::simd_vector::SimdVector;
 use crate::{Fft, FftDirection, twiddles};
 
+/// The Rader's input reordering table, stored in the narrowest integer type that holds every
+/// offset. The table is read once per pass alongside the data, so a narrower type is less memory
+/// traffic, and a smaller cache footprint for the data to share.
+enum Permutation {
+    U16(Box<[u16]>),
+    U32(Box<[u32]>),
+    Usize(Box<[usize]>),
+}
+
+impl Permutation {
+    /// Picks the narrowest type for offsets `0..=max_index`, and collects `indices` into it.
+    fn new(max_index: usize, indices: impl Iterator<Item = usize>) -> Self {
+        if u16::try_from(max_index).is_ok() {
+            Self::U16(indices.map(|index| index as u16).collect())
+        } else if u32::try_from(max_index).is_ok() {
+            Self::U32(indices.map(|index| index as u32).collect())
+        } else {
+            Self::Usize(indices.collect())
+        }
+    }
+}
+
+/// An element type for a `Permutation` table.
+trait PermutationIndex: Copy {
+    fn to_usize(self) -> usize;
+}
+impl PermutationIndex for u16 {
+    #[inline(always)]
+    fn to_usize(self) -> usize {
+        self as usize
+    }
+}
+impl PermutationIndex for u32 {
+    #[inline(always)]
+    fn to_usize(self) -> usize {
+        self as usize
+    }
+}
+impl PermutationIndex for usize {
+    #[inline(always)]
+    fn to_usize(self) -> usize {
+        self
+    }
+}
+
+/// The body of `SimdRaders::gather_input`, once per index type.
+#[inline(always)]
+fn gather<T: Copy, I: PermutationIndex>(permutation: &[I], src: &[T], dest: &mut [T]) {
+    for (dest_element, &input_index) in dest.iter_mut().zip(permutation.iter()) {
+        *dest_element = src[input_index.to_usize()];
+    }
+}
+
+/// The body of `SimdRaders::scatter_output`, once per index type.
+#[inline(always)]
+fn scatter<T: FftNum, I: PermutationIndex>(
+    permutation: &[I],
+    src: &[Complex<T>],
+    dest: &mut [Complex<T>],
+) {
+    let (&last_index, head) = permutation.split_last().unwrap();
+    let (last_element, src_head) = src.split_last().unwrap();
+
+    for (src_element, &output_index) in src_head.iter().zip(head.iter().rev()) {
+        dest[output_index.to_usize()] = src_element.conj();
+    }
+    dest[last_index.to_usize()] = last_element.conj();
+}
+
 /// Rader's Algorithm, generic over SIMD instruction set.
 /// This is designed to be embedded into a feature-specific struct (such as `SseRaders` or
 /// `NeonRaders`), and not created directly.
@@ -39,11 +108,7 @@ pub struct SimdRaders<V: SimdVector, T> {
     // primitive root and the length, so building it once here keeps a serial chain of
     // strength-reduced modular multiplies out of the hot loops. avx_raders.rs precomputes its
     // output mapping for the same reason.
-    //
-    // usize rather than u32, so that every length a usize can hold works. u32 halves the table,
-    // but that only measured as faster from around 300k points, by 1 to 3%, where the table
-    // starts to add to the memory traffic.
-    permutation: Box<[usize]>,
+    permutation: Permutation,
 
     len: usize,
     inplace_scratch_len: usize,
@@ -117,13 +182,12 @@ impl<V: SimdVector, T: FftNum> SimdRaders<V, T> {
         }
 
         // Precompute the input reordering. Stored already offset by one so the hot loops are a
-        // plain indexed load with no arithmetic.
-        let mut permutation = Vec::with_capacity(inner_fft_len);
-        let mut input_index = 1u64;
-        for _ in 0..inner_fft_len {
-            input_index = (input_index * primitive_root) % reduced_len;
-            permutation.push((input_index - 1) as usize);
-        }
+        // plain indexed load with no arithmetic, which puts the offsets in 0..inner_fft_len.
+        let input_indices = (0..inner_fft_len).scan(1u64, |input_index, _| {
+            *input_index = (*input_index * primitive_root) % reduced_len;
+            Some((*input_index - 1) as usize)
+        });
+        let permutation = Permutation::new(inner_fft_len - 1, input_indices);
 
         let required_inner_scratch = inner_fft.get_inplace_scratch_len();
         let extra_inner_scratch = if required_inner_scratch <= inner_fft_len {
@@ -147,7 +211,7 @@ impl<V: SimdVector, T: FftNum> SimdRaders<V, T> {
             inner_fft,
             inner_fft_data: inner_fft_input.into_boxed_slice(),
 
-            permutation: permutation.into_boxed_slice(),
+            permutation,
 
             len,
             inplace_scratch_len,
@@ -162,8 +226,10 @@ impl<V: SimdVector, T: FftNum> SimdRaders<V, T> {
     /// Copies `src` into `dest`, applying the input reordering.
     #[inline]
     fn gather_input(&self, src: &[Complex<T>], dest: &mut [Complex<T>]) {
-        for (dest_element, &input_index) in dest.iter_mut().zip(self.permutation.iter()) {
-            *dest_element = src[input_index];
+        match &self.permutation {
+            Permutation::U16(permutation) => gather(permutation, src, dest),
+            Permutation::U32(permutation) => gather(permutation, src, dest),
+            Permutation::Usize(permutation) => gather(permutation, src, dest),
         }
     }
 
@@ -175,13 +241,11 @@ impl<V: SimdVector, T: FftNum> SimdRaders<V, T> {
     /// the loop a plain zip over two slices instead of a chained iterator.
     #[inline]
     fn scatter_output(&self, src: &[Complex<T>], dest: &mut [Complex<T>]) {
-        let (&last_index, head) = self.permutation.split_last().unwrap();
-        let (last_element, src_head) = src.split_last().unwrap();
-
-        for (src_element, &output_index) in src_head.iter().zip(head.iter().rev()) {
-            dest[output_index] = src_element.conj();
+        match &self.permutation {
+            Permutation::U16(permutation) => scatter(permutation, src, dest),
+            Permutation::U32(permutation) => scatter(permutation, src, dest),
+            Permutation::Usize(permutation) => scatter(permutation, src, dest),
         }
-        dest[last_index] = last_element.conj();
     }
 
     /// Multiply the inner result by the cached setup data, conjugating as we go to set up for an
@@ -367,6 +431,41 @@ impl<V: SimdVector, T: FftNum> SimdRaders<V, T> {
     #[inline(always)]
     pub fn fft_direction(&self) -> FftDirection {
         self.direction
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use crate::FftPlannerScalar;
+    use crate::algorithm::BluesteinsAlgorithm;
+    use crate::test_utils::{compare_vectors, random_signal};
+
+    /// Both sides of the u16 to u32 switch in `Permutation`: 65537 is the largest prime whose
+    /// offsets all fit in a u16, and 65539 is the next prime. A DFT reference is too slow at these
+    /// lengths, so the reference is Bluestein's. Only the reordering depends on the index type, so
+    /// the scalar vector type covers every backend.
+    #[test]
+    fn index_type_boundary() {
+        let direction = FftDirection::Forward;
+        let mut planner = FftPlannerScalar::<f64>::new();
+        for (len, expect_u16) in [(65537, true), (65539, false)] {
+            let raders = SimdRaders::<Complex<f64>, f64>::new(planner.plan_fft(len - 1, direction));
+            match raders.permutation {
+                Permutation::U16(_) => assert!(expect_u16, "len {len} should not use u16"),
+                Permutation::U32(_) => assert!(!expect_u16, "len {len} should use u16"),
+                Permutation::Usize(_) => panic!("len {len} should fit in u32"),
+            }
+
+            let bluesteins = BluesteinsAlgorithm::new(len, planner.plan_fft(1 << 18, direction));
+            let mut expected = random_signal::<f64>(len);
+            let mut actual = expected.clone();
+            bluesteins.process(&mut expected);
+
+            let mut scratch = vec![Complex::zero(); raders.get_inplace_scratch_len()];
+            raders.process_single(&mut actual, &mut scratch);
+            assert!(compare_vectors(&expected, &actual), "len {len} is wrong");
+        }
     }
 }
 
