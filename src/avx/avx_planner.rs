@@ -11,6 +11,9 @@ use crate::{algorithm::butterflies::*, fft_cache::FftCache};
 
 use super::*;
 
+/// The largest buffer, in bytes, computed as one Stockham FFT.
+const STOCKHAM_MAX_BYTES: usize = 2 << 20;
+
 fn wrap_fft<T: FftNum>(butterfly: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
     Arc::new(butterfly) as Arc<dyn Fft<T>>
 }
@@ -203,6 +206,9 @@ struct AvxPlannerInternal<A: AvxNum, T: FftNum> {
 
 impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
+        if let Some(fft) = self.construct_stockham(len, direction) {
+            return fft;
+        }
         // Step 1: Create a plan for this FFT length.
         let plan = self.plan_fft(len, direction, Self::plan_mixed_radix_base);
 
@@ -220,6 +226,9 @@ impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
 }
 impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
+        if let Some(fft) = self.construct_stockham(len, direction) {
+            return fft;
+        }
         // Step 1: Create a plan for this FFT length.
         let plan = self.plan_fft(len, direction, Self::plan_mixed_radix_base);
 
@@ -662,6 +671,31 @@ impl<T: FftNum> AvxPlannerInternal<f64, T> {
 // type-agnostic planning stuff
 //-------------------------------------------------------------------
 impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
+    /// A Stockham FFT for powers of two at least `stockham_min_len` long, on CPUs where it wins.
+    /// Above [`STOCKHAM_MAX_BYTES`] its buffers outgrow the L2 cache, so a radix 8 step splits the
+    /// work into Stockham FFTs that fit.
+    fn construct_stockham(
+        &mut self,
+        len: usize,
+        direction: FftDirection,
+    ) -> Option<Arc<dyn Fft<T>>> {
+        let min_len = stockham_min_len()?;
+        if !len.is_power_of_two() || len < min_len {
+            return None;
+        }
+        if let Some(fft) = self.cache.get(len, direction) {
+            return Some(fft);
+        }
+        let fft: Arc<dyn Fft<T>> = if len * 2 * size_of::<A>() > STOCKHAM_MAX_BYTES {
+            let inner = self.construct_stockham(len / 8, direction)?;
+            Arc::new(MixedRadix8xnAvx::<A, T>::new(inner).ok()?)
+        } else {
+            Arc::new(StockhamAvx::<A, T>::new(len, direction).ok()?)
+        };
+        self.cache.insert(&fft);
+        Some(fft)
+    }
+
     // Given a length, return a plan for how this FFT should be computed
     fn plan_fft(
         &self,
