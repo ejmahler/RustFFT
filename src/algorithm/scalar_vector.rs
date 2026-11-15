@@ -8,7 +8,8 @@ use crate::algorithm::scalar_column_butterflies::{
     ScalarParallelButterfly5, ScalarParallelButterfly6, ScalarParallelButterfly7,
     ScalarParallelButterfly8, ScalarParallelButterfly16,
 };
-use crate::{FftDirection, FftNum, simd::simd_vector::SimdVector, twiddles};
+use crate::simd::simd_vector::{MulSliceAlgorithm, SimdVector};
+use crate::{FftDirection, FftNum, twiddles};
 
 // Adapter for SimdVector. If we pretend that a Complex<T> is a simd vector, we can plug Complex<T> into the simd-based algorithms and avoid having separate scalar and simd implementations
 // We obviously won't be directly using simd intrinsics, but the fact that the simd algorithms are optimized for simd should make the scalar code highly auto-simd-able anyways.
@@ -17,6 +18,10 @@ impl<T: FftNum> SimdVector for Complex<T> {
 
     // The unroll severely hurts wasm32 scalar performance, but significantly benefits other platforms, so disable it just for wasm
     const RADIXN_CROSS_LAYER_UNROLL: bool = !cfg!(target_arch = "wasm32");
+
+    // A vector here is a single complex number, so both choices are a loop over complex numbers,
+    // and only the plain one leaves LLVM free to vectorize it the way it sees fit.
+    const MUL_SLICE_ALGORITHM: MulSliceAlgorithm = MulSliceAlgorithm::Autovectorize;
 
     type ScalarType = T;
 
@@ -107,6 +112,10 @@ impl<T: FftNum> SimdVector for Complex<T> {
 
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
         left * right
+    }
+
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        left.conj() * right
     }
 
     unsafe fn make_twiddle(twiddles: &[Complex<Self::ScalarType>]) -> Self::Twiddle {

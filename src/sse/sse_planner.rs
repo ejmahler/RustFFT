@@ -11,8 +11,10 @@ use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
 use crate::Fft;
 use crate::algorithm::*;
+use crate::sse::sse_bluesteins::SseBluesteins;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies;
+use crate::sse::sse_raders::SseRaders;
 
 use crate::common::RadixFactor;
 use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
@@ -454,11 +456,23 @@ impl<T: FftNum> FftPlannerSse<T> {
             }
             Recipe::RadersAlgorithm { inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(SseRaders::<__m128, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SseRaders::<__m128d, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(BluesteinsAlgorithm::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(SseBluesteins::<__m128, T>::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SseBluesteins::<__m128d, T>::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
         }
     }
