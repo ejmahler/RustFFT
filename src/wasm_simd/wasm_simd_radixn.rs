@@ -14,7 +14,6 @@ use crate::{
 
 pub struct WasmSimdRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);
 impl<V: SimdVector, T: FftNum> WasmSimdRadixN<V, T> {
-    #[allow(dead_code)]
     pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
         Self(SimdRadixN::new(factors, base_fft))
     }
