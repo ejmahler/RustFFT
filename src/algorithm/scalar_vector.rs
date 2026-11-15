@@ -6,6 +6,7 @@ use num_traits::Zero;
 use crate::algorithm::scalar_column_butterflies::{
     ScalarParallelButterfly2, ScalarParallelButterfly3, ScalarParallelButterfly4,
     ScalarParallelButterfly5, ScalarParallelButterfly6, ScalarParallelButterfly7,
+    ScalarParallelButterfly8, ScalarParallelButterfly16,
 };
 use crate::{FftDirection, FftNum, simd::simd_vector::SimdVector, twiddles};
 
@@ -25,6 +26,9 @@ impl<T: FftNum> SimdVector for Complex<T> {
     type Butterfly5 = ScalarParallelButterfly5<T>;
     type Butterfly6 = ScalarParallelButterfly6<T>;
     type Butterfly7 = ScalarParallelButterfly7<T>;
+    type Butterfly8 = ScalarParallelButterfly8<T>;
+    type Butterfly16 = ScalarParallelButterfly16<T>;
+    type Twiddle = Self;
 
     unsafe fn zero_vector() -> Self {
         Zero::zero()
@@ -38,8 +42,9 @@ impl<T: FftNum> SimdVector for Complex<T> {
         unimplemented!("Impossible to do a partial load of complex scalars");
     }
 
-    unsafe fn load1_dup_complex(_ptr: *const num_complex::Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Unused: a dup load of one complex scalar is just load_complex");
+    unsafe fn load1_dup_complex(ptr: *const num_complex::Complex<Self::ScalarType>) -> Self {
+        // A vector of one complex number, so duplicating it is the plain load
+        unsafe { Self::load_complex(ptr) }
     }
 
     unsafe fn store_complex(ptr: *mut num_complex::Complex<Self::ScalarType>, data: Self) {
@@ -104,6 +109,18 @@ impl<T: FftNum> SimdVector for Complex<T> {
         left * right
     }
 
+    unsafe fn make_twiddle(twiddles: &[Complex<Self::ScalarType>]) -> Self::Twiddle {
+        twiddles[0]
+    }
+
+    unsafe fn broadcast_twiddle(twiddle: Complex<Self::ScalarType>) -> Self::Twiddle {
+        twiddle
+    }
+
+    unsafe fn mul_twiddle(value: Self, twiddle: Self::Twiddle) -> Self {
+        value * twiddle
+    }
+
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
@@ -130,5 +147,11 @@ impl<T: FftNum> SimdVector for Complex<T> {
     }
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         Self::Butterfly7::new(direction)
+    }
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        Self::Butterfly8::new(direction)
+    }
+    unsafe fn make_butterfly16(direction: FftDirection) -> Self::Butterfly16 {
+        Self::Butterfly16::new(direction)
     }
 }

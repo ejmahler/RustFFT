@@ -13,6 +13,9 @@ use num_complex::Complex;
 
 pub struct Rotate90F32 {
     sign: float32x4_t,
+    /// The factor to multiply a value with swapped real and imaginary parts by to rotate it, for
+    /// the fused rotations.
+    rotation: float32x4_t,
 }
 
 impl Rotate90F32 {
@@ -23,6 +26,11 @@ impl Rotate90F32 {
                 unsafe { vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()) }
             } else {
                 unsafe { vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()) }
+            },
+            rotation: if direction == FftDirection::Inverse {
+                unsafe { vld1q_f32([-1.0, 1.0, -1.0, 1.0].as_ptr()) }
+            } else {
+                unsafe { vld1q_f32([1.0, -1.0, 1.0, -1.0].as_ptr()) }
             },
         }
     }
@@ -38,11 +46,23 @@ impl Rotate90F32 {
         }
     }
 
+    /// Rotates `values` and adds the result to `acc`, with a fused multiply-add.
+    #[inline(always)]
+    pub unsafe fn rotate_and_add(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        unsafe { vfmaq_f32(acc, vrev64q_f32(values), self.rotation) }
+    }
+
+    /// Rotates `values` and subtracts the result from `acc`, with a fused multiply-subtract.
+    #[inline(always)]
+    pub unsafe fn rotate_and_sub(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        unsafe { vfmsq_f32(acc, vrev64q_f32(values), self.rotation) }
+    }
+
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: float32x4_t) -> float32x4_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let sum = vaddq_f32(rotated, values);
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
             vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
         }
     }
@@ -50,18 +70,18 @@ impl Rotate90F32 {
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: float32x4_t) -> float32x4_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vsubq_f32(rotated, values);
-            vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+            // values - rotate(values), which is the negated difference we are after
+            let diff = self.rotate_and_sub(values, values);
+            vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
         }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: float32x4_t) -> float32x4_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vaddq_f32(rotated, values);
-            vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
+            vmulq_f32(sum, vmovq_n_f32(-(0.5f32.sqrt())))
         }
     }
 }
@@ -231,6 +251,9 @@ pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -
 
 pub(crate) struct Rotate90F64 {
     sign: float64x2_t,
+    /// The factor to multiply a value with swapped real and imaginary parts by to rotate it, for
+    /// the fused rotations.
+    rotation: float64x2_t,
 }
 
 impl Rotate90F64 {
@@ -242,13 +265,18 @@ impl Rotate90F64 {
             } else {
                 unsafe { vld1q_f64([0.0, -0.0].as_ptr()) }
             },
+            rotation: if direction == FftDirection::Inverse {
+                unsafe { vld1q_f64([-1.0, 1.0].as_ptr()) }
+            } else {
+                unsafe { vld1q_f64([1.0, -1.0].as_ptr()) }
+            },
         }
     }
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
         unsafe {
-            let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
+            let temp = vextq_f64(values, values, 1);
             vreinterpretq_f64_u64(veorq_u64(
                 vreinterpretq_u64_f64(temp),
                 vreinterpretq_u64_f64(self.sign),
@@ -256,11 +284,23 @@ impl Rotate90F64 {
         }
     }
 
+    /// Rotates `values` and adds the result to `acc`, with a fused multiply-add.
+    #[inline(always)]
+    pub unsafe fn rotate_and_add(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        unsafe { vfmaq_f64(acc, vextq_f64(values, values, 1), self.rotation) }
+    }
+
+    /// Rotates `values` and subtracts the result from `acc`, with a fused multiply-subtract.
+    #[inline(always)]
+    pub unsafe fn rotate_and_sub(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        unsafe { vfmsq_f64(acc, vextq_f64(values, values, 1), self.rotation) }
+    }
+
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: float64x2_t) -> float64x2_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let sum = vaddq_f64(rotated, values);
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
             vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
         }
     }
@@ -268,18 +308,18 @@ impl Rotate90F64 {
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: float64x2_t) -> float64x2_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vsubq_f64(rotated, values);
-            vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
+            // values - rotate(values), which is the negated difference we are after
+            let diff = self.rotate_and_sub(values, values);
+            vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
         }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: float64x2_t) -> float64x2_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vaddq_f64(rotated, values);
-            vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
+            vmulq_f64(sum, vmovq_n_f64(-(0.5f64.sqrt())))
         }
     }
 }

@@ -1715,6 +1715,53 @@ impl<T: FftNum> WasmSimdF64Butterfly6<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
+pub struct WasmSimdF32ParallelButterfly8 {
+    bf2: WasmSimdF32ParallelButterfly2,
+    bf4: WasmSimdF32ParallelButterfly4,
+}
+impl WasmSimdF32ParallelButterfly8 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            bf2: WasmSimdF32ParallelButterfly2::new(direction),
+            bf4: WasmSimdF32ParallelButterfly4::new(direction),
+        }
+    }
+}
+impl ParallelFft<WasmVector32, 8> for WasmSimdF32ParallelButterfly8 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [WasmVector32; 8]) -> [WasmVector32; 8] {
+        // Algorithm: 4x2 mixed radix
+
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let val03 = self.bf4.parallel_fft([data[0], data[2], data[4], data[6]]);
+        let mut val47 = self.bf4.parallel_fft([data[1], data[3], data[5], data[7]]);
+
+        // step 3: apply twiddle factors
+        // Safety: the rotations and `mul_complex` require the simd128 target feature, which every caller of a Wasm SIMD butterfly enables.
+        unsafe {
+            val47[1] = self.bf4.rotate.rotate_45(val47[1]);
+            val47[2] = self.bf4.rotate.rotate(val47[2]);
+            val47[3] = self.bf4.rotate.rotate_135(val47[3]);
+        }
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf2.parallel_fft([val03[0], val47[0]]);
+        let out1 = self.bf2.parallel_fft([val03[1], val47[1]]);
+        let out2 = self.bf2.parallel_fft([val03[2], val47[2]]);
+        let out3 = self.bf2.parallel_fft([val03[3], val47[3]]);
+
+        // step 6: transpose
+        [
+            out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
+        ]
+    }
+}
+
 pub struct WasmSimdF32Butterfly8<T> {
     root2: WasmVector32,
     root2_dual: WasmVector32,
@@ -1852,6 +1899,53 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
 //  | (_) | |_____| | (_) |__   _| |_) | | |_
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
+
+pub struct WasmSimdF64ParallelButterfly8 {
+    bf2: WasmSimdF64ParallelButterfly2,
+    bf4: WasmSimdF64ParallelButterfly4,
+}
+impl WasmSimdF64ParallelButterfly8 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            bf2: WasmSimdF64ParallelButterfly2::new(direction),
+            bf4: WasmSimdF64ParallelButterfly4::new(direction),
+        }
+    }
+}
+impl ParallelFft<WasmVector64, 8> for WasmSimdF64ParallelButterfly8 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [WasmVector64; 8]) -> [WasmVector64; 8] {
+        // Algorithm: 4x2 mixed radix
+
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let val03 = self.bf4.parallel_fft([data[0], data[2], data[4], data[6]]);
+        let mut val47 = self.bf4.parallel_fft([data[1], data[3], data[5], data[7]]);
+
+        // step 3: apply twiddle factors
+        // Safety: the rotations and `mul_complex` require the simd128 target feature, which every caller of a Wasm SIMD butterfly enables.
+        unsafe {
+            val47[1] = self.bf4.rotate.rotate_45(val47[1]);
+            val47[2] = self.bf4.rotate.rotate(val47[2]);
+            val47[3] = self.bf4.rotate.rotate_135(val47[3]);
+        }
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf2.parallel_fft([val03[0], val47[0]]);
+        let out1 = self.bf2.parallel_fft([val03[1], val47[1]]);
+        let out2 = self.bf2.parallel_fft([val03[2], val47[2]]);
+        let out3 = self.bf2.parallel_fft([val03[3], val47[3]]);
+
+        // step 6: transpose
+        [
+            out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
+        ]
+    }
+}
 
 pub struct WasmSimdF64Butterfly8<T> {
     root2: WasmVector64,
@@ -2814,6 +2908,78 @@ impl<T: FftNum> WasmSimdF64Butterfly15<T> {
 //  |_|\___/          |____/_____|_.__/|_|\__|
 //
 
+pub struct WasmSimdF32ParallelButterfly16 {
+    bf4: WasmSimdF32ParallelButterfly4,
+    twiddle1: <WasmVector32 as SimdVector>::Twiddle,
+    twiddle3: <WasmVector32 as SimdVector>::Twiddle,
+    twiddle9: <WasmVector32 as SimdVector>::Twiddle,
+}
+impl WasmSimdF32ParallelButterfly16 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        let tw1: Complex<f32> = twiddles::compute_twiddle(1, 16, direction);
+        let tw3: Complex<f32> = twiddles::compute_twiddle(3, 16, direction);
+        let tw9: Complex<f32> = twiddles::compute_twiddle(9, 16, direction);
+        // Safety: `make_twiddle` requires the simd128 target feature, which every caller of a Wasm SIMD butterfly enables.
+        unsafe {
+            Self {
+                bf4: WasmSimdF32ParallelButterfly4::new(direction),
+                twiddle1: WasmVector32::make_twiddle(&[tw1, tw1]),
+                twiddle3: WasmVector32::make_twiddle(&[tw3, tw3]),
+                twiddle9: WasmVector32::make_twiddle(&[tw9, tw9]),
+            }
+        }
+    }
+}
+impl ParallelFft<WasmVector32, 16> for WasmSimdF32ParallelButterfly16 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [WasmVector32; 16]) -> [WasmVector32; 16] {
+        // Algorithm: 4x4 mixed radix
+
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let tmp0 = self.bf4.parallel_fft([data[0], data[4], data[8], data[12]]);
+        let mut tmp1 = self.bf4.parallel_fft([data[1], data[5], data[9], data[13]]);
+        let mut tmp2 = self
+            .bf4
+            .parallel_fft([data[2], data[6], data[10], data[14]]);
+        let mut tmp3 = self
+            .bf4
+            .parallel_fft([data[3], data[7], data[11], data[15]]);
+
+        // step 3: apply twiddle factors
+        // Safety: the rotations and `mul_complex` require the simd128 target feature, which every caller of a Wasm SIMD butterfly enables.
+        unsafe {
+            tmp1[1] = SimdVector::mul_twiddle(tmp1[1], self.twiddle1);
+            tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
+            tmp1[3] = SimdVector::mul_twiddle(tmp1[3], self.twiddle3);
+
+            tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+            tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+            tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
+
+            tmp3[1] = SimdVector::mul_twiddle(tmp3[1], self.twiddle3);
+            tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
+            tmp3[3] = SimdVector::mul_twiddle(tmp3[3], self.twiddle9);
+        }
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf4.parallel_fft([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+        let out1 = self.bf4.parallel_fft([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+        let out2 = self.bf4.parallel_fft([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+        let out3 = self.bf4.parallel_fft([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+
+        // step 6: transpose
+        [
+            out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1], out0[2],
+            out1[2], out2[2], out3[2], out0[3], out1[3], out2[3], out3[3],
+        ]
+    }
+}
+
 pub struct WasmSimdF32Butterfly16<T> {
     bf4: WasmSimdF32Butterfly4<T>,
     twiddles_packed: [WasmVector32; 6],
@@ -3014,6 +3180,78 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
 //  | | (_) | |_____| | (_) |__   _| |_) | | |_
 //  |_|\___/           \___/   |_| |_.__/|_|\__|
 //
+
+pub struct WasmSimdF64ParallelButterfly16 {
+    bf4: WasmSimdF64ParallelButterfly4,
+    twiddle1: <WasmVector64 as SimdVector>::Twiddle,
+    twiddle3: <WasmVector64 as SimdVector>::Twiddle,
+    twiddle9: <WasmVector64 as SimdVector>::Twiddle,
+}
+impl WasmSimdF64ParallelButterfly16 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 16, direction);
+        let tw3: Complex<f64> = twiddles::compute_twiddle(3, 16, direction);
+        let tw9: Complex<f64> = twiddles::compute_twiddle(9, 16, direction);
+        // Safety: `make_twiddle` requires the simd128 target feature, which every caller of a Wasm SIMD butterfly enables.
+        unsafe {
+            Self {
+                bf4: WasmSimdF64ParallelButterfly4::new(direction),
+                twiddle1: WasmVector64::make_twiddle(&[tw1]),
+                twiddle3: WasmVector64::make_twiddle(&[tw3]),
+                twiddle9: WasmVector64::make_twiddle(&[tw9]),
+            }
+        }
+    }
+}
+impl ParallelFft<WasmVector64, 16> for WasmSimdF64ParallelButterfly16 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [WasmVector64; 16]) -> [WasmVector64; 16] {
+        // Algorithm: 4x4 mixed radix
+
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let tmp0 = self.bf4.parallel_fft([data[0], data[4], data[8], data[12]]);
+        let mut tmp1 = self.bf4.parallel_fft([data[1], data[5], data[9], data[13]]);
+        let mut tmp2 = self
+            .bf4
+            .parallel_fft([data[2], data[6], data[10], data[14]]);
+        let mut tmp3 = self
+            .bf4
+            .parallel_fft([data[3], data[7], data[11], data[15]]);
+
+        // step 3: apply twiddle factors
+        // Safety: the rotations and `mul_complex` require the simd128 target feature, which every caller of a Wasm SIMD butterfly enables.
+        unsafe {
+            tmp1[1] = SimdVector::mul_twiddle(tmp1[1], self.twiddle1);
+            tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
+            tmp1[3] = SimdVector::mul_twiddle(tmp1[3], self.twiddle3);
+
+            tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+            tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+            tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
+
+            tmp3[1] = SimdVector::mul_twiddle(tmp3[1], self.twiddle3);
+            tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
+            tmp3[3] = SimdVector::mul_twiddle(tmp3[3], self.twiddle9);
+        }
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf4.parallel_fft([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+        let out1 = self.bf4.parallel_fft([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+        let out2 = self.bf4.parallel_fft([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+        let out3 = self.bf4.parallel_fft([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+
+        // step 6: transpose
+        [
+            out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1], out0[2],
+            out1[2], out2[2], out3[2], out0[3], out1[3], out2[3], out3[3],
+        ]
+    }
+}
 
 pub struct WasmSimdF64Butterfly16<T> {
     bf4: WasmSimdF64Butterfly4<T>,
@@ -4022,6 +4260,16 @@ mod unit_tests {
         WasmSimdF32ParallelButterfly6,
         6
     );
+    test_parallel_butterfly_32_func!(
+        test_wasm_simdf32_parallel_butterfly8,
+        WasmSimdF32ParallelButterfly8,
+        8
+    );
+    test_parallel_butterfly_32_func!(
+        test_wasm_simdf32_parallel_butterfly16,
+        WasmSimdF32ParallelButterfly16,
+        16
+    );
 
     macro_rules! test_parallel_butterfly_64_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
@@ -4063,6 +4311,16 @@ mod unit_tests {
         test_wasm_simdf64_parallel_butterfly6,
         WasmSimdF64ParallelButterfly6,
         6
+    );
+    test_parallel_butterfly_64_func!(
+        test_wasm_simdf64_parallel_butterfly8,
+        WasmSimdF64ParallelButterfly8,
+        8
+    );
+    test_parallel_butterfly_64_func!(
+        test_wasm_simdf64_parallel_butterfly16,
+        WasmSimdF64ParallelButterfly16,
+        16
     );
 
     #[wasm_bindgen_test]

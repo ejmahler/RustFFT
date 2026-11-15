@@ -155,6 +155,9 @@ impl SimdVector for FcmaVector64 {
     type Butterfly5 = FcmaF64ParallelButterfly5;
     type Butterfly6 = FcmaF64ParallelButterfly6;
     type Butterfly7 = FcmaF64ParallelButterfly7;
+    type Butterfly8 = FcmaF64ParallelButterfly8;
+    type Butterfly16 = FcmaF64ParallelButterfly16;
+    type Twiddle = Self;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -171,8 +174,9 @@ impl SimdVector for FcmaVector64 {
     }
 
     #[inline(always)]
-    unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Unused: a dup load of one complex f64 is just load_complex");
+    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        // A vector of one complex number, so duplicating it is the plain load
+        unsafe { Self::load_complex(ptr) }
     }
 
     #[inline(always)]
@@ -199,30 +203,6 @@ impl SimdVector for FcmaVector64 {
     #[inline(always)]
     unsafe fn swap_complex(a: Self) -> Self {
         unsafe { Self(vextq_f64(a.0, a.0, 1)) }
-    }
-    #[inline(always)]
-    unsafe fn rotate_add<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
-        unsafe {
-            if FORWARD {
-                Self(vcaddq_rot270_f64(a.0, b.0))
-            } else {
-                Self(vcaddq_rot90_f64(a.0, b.0))
-            }
-        }
-    }
-    #[inline(always)]
-    unsafe fn rotate_sub<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
-        unsafe {
-            if FORWARD {
-                Self(vcaddq_rot90_f64(a.0, b.0))
-            } else {
-                Self(vcaddq_rot270_f64(a.0, b.0))
-            }
-        }
-    }
-    #[inline(always)]
-    unsafe fn mul_twiddle(value: Self, _re: Self, _im: Self, twiddle: Self) -> Self {
-        unsafe { Self::mul_complex(twiddle, value) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
@@ -279,6 +259,19 @@ impl SimdVector for FcmaVector64 {
     }
 
     #[inline(always)]
+    unsafe fn make_twiddle(twiddles: &[Complex<Self::ScalarType>]) -> Self::Twiddle {
+        unsafe { twiddles.load(0) }
+    }
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(twiddle: Complex<Self::ScalarType>) -> Self::Twiddle {
+        unsafe { [twiddle].as_slice().load1_dup(0) }
+    }
+    #[inline(always)]
+    unsafe fn mul_twiddle(value: Self, twiddle: Self::Twiddle) -> Self {
+        unsafe { Self::mul_complex(value, twiddle) }
+    }
+
+    #[inline(always)]
     unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
         Self::Butterfly2::new(direction)
     }
@@ -302,6 +295,14 @@ impl SimdVector for FcmaVector64 {
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         unsafe { Self::Butterfly7::new(direction) }
     }
+    #[inline(always)]
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        Self::Butterfly8::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly16(direction: FftDirection) -> Self::Butterfly16 {
+        Self::Butterfly16::new(direction)
+    }
 }
 
 /// `float32x4_t`, wrapped so that it can carry an FCMA `SimdVector` impl. See
@@ -322,6 +323,9 @@ impl SimdVector for FcmaVector32 {
     type Butterfly5 = FcmaF32ParallelButterfly5;
     type Butterfly6 = FcmaF32ParallelButterfly6;
     type Butterfly7 = FcmaF32ParallelButterfly7;
+    type Butterfly8 = FcmaF32ParallelButterfly8;
+    type Butterfly16 = FcmaF32ParallelButterfly16;
+    type Twiddle = Self;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -385,30 +389,6 @@ impl SimdVector for FcmaVector32 {
         unsafe { Self(vrev64q_f32(a.0)) }
     }
     #[inline(always)]
-    unsafe fn rotate_add<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
-        unsafe {
-            if FORWARD {
-                Self(vcaddq_rot270_f32(a.0, b.0))
-            } else {
-                Self(vcaddq_rot90_f32(a.0, b.0))
-            }
-        }
-    }
-    #[inline(always)]
-    unsafe fn rotate_sub<const FORWARD: bool>(a: Self, b: Self, _rotation: Self) -> Self {
-        unsafe {
-            if FORWARD {
-                Self(vcaddq_rot90_f32(a.0, b.0))
-            } else {
-                Self(vcaddq_rot270_f32(a.0, b.0))
-            }
-        }
-    }
-    #[inline(always)]
-    unsafe fn mul_twiddle(value: Self, _re: Self, _im: Self, twiddle: Self) -> Self {
-        unsafe { Self::mul_complex(twiddle, value) }
-    }
-    #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
         unsafe { Self(vaddq_f32(a.0, b.0)) }
     }
@@ -464,6 +444,19 @@ impl SimdVector for FcmaVector32 {
     }
 
     #[inline(always)]
+    unsafe fn make_twiddle(twiddles: &[Complex<Self::ScalarType>]) -> Self::Twiddle {
+        unsafe { twiddles.load(0) }
+    }
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(twiddle: Complex<Self::ScalarType>) -> Self::Twiddle {
+        unsafe { [twiddle].as_slice().load1_dup(0) }
+    }
+    #[inline(always)]
+    unsafe fn mul_twiddle(value: Self, twiddle: Self::Twiddle) -> Self {
+        unsafe { Self::mul_complex(value, twiddle) }
+    }
+
+    #[inline(always)]
     unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
         Self::Butterfly2::new(direction)
     }
@@ -486,6 +479,14 @@ impl SimdVector for FcmaVector32 {
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         unsafe { Self::Butterfly7::new(direction) }
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        Self::Butterfly8::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly16(direction: FftDirection) -> Self::Butterfly16 {
+        Self::Butterfly16::new(direction)
     }
 }
 
