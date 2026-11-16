@@ -257,6 +257,8 @@ mod avx64_utils;
 mod avx_bluesteins;
 mod avx_mixed_radix;
 mod avx_raders;
+mod avx_stockham;
+pub(crate) use self::avx_stockham::{StockhamAvx, stockham_min_len};
 
 pub mod avx_planner;
 
