@@ -24,7 +24,6 @@ use crate::common::{FftNum, RadixFactor};
 use crate::simd::simd_radixn::cross_layer_chunks;
 use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
 use crate::simd::simd_vector::SimdVector;
-use crate::simd::simd_stockham::{place, placement_padding};
 use crate::{Fft, FftDirection};
 
 const RADIX: usize = 4;
@@ -117,7 +116,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         let base_inplace_scratch = base_fft.get_inplace_scratch_len();
         // the in-place path transposes into its own scratch and runs the base out of place from
         // there back into the caller's buffer, so it needs the base's out-of-place scratch on top
-        let inplace_scratch_len = len + base_fft.get_outofplace_scratch_len() + placement_padding::<Complex<T>>();
+        let inplace_scratch_len = len + base_fft.get_outofplace_scratch_len();
         let outofplace_scratch_len = if base_inplace_scratch > len {
             base_inplace_scratch
         } else {
@@ -214,7 +213,6 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
 
     #[inline(always)]
     pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        let scratch = place(scratch, buffer);
         let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
         self.transpose(buffer, transposed);
         // Run the base out of place, from the scratch back into the caller's chunk.

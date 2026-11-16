@@ -500,9 +500,9 @@ impl<T: FftNum> FftPlannerNeon<T> {
     /// radix 4 plans are faster.
     fn stockham_min_len() -> usize {
         if TypeId::of::<T>() == TypeId::of::<f32>() {
-            256
+            std::usize::MAX
         } else {
-            128
+            std::usize::MAX
         }
     }
 

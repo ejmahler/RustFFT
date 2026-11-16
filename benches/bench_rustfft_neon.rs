@@ -1,10 +1,14 @@
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
+use rustfft::{Fft, FftNum};
+use rustfft::neon::neon_stockham::NeonStockham;
+use rustfft::simd::simd_vector::SimdVector;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use std::arch::aarch64::{float32x4_t, float64x2_t};
+
+use criterion::{criterion_group, criterion_main, Bencher, Criterion, BenchmarkId};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -186,6 +190,46 @@ fn neon_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  4800
 fn neon_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
 
 
+fn bench_stockham<V: SimdVector, T: FftNum>(b: &mut Bencher, len: usize) {
+    let fft: Arc<dyn Fft<T>> = Arc::new(NeonStockham::<V, T>::new(len, rustfft::FftDirection::Forward));
+    assert_eq!(fft.len(), len);
+
+    let mut buffer = vec![Complex::zero(); len];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+fn neon_compare_stockham(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("compare_stockham_f32");
+
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("stockham", len), |b| {
+                bench_stockham::<float32x4_t, f32>(b, len);
+            });
+            group.bench_function(BenchmarkId::new("radix4_old", len), |b| {
+                bench_planned_f32(b, len);
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("compare_stockham_f64");
+
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("stockham", len), |b| {
+                bench_stockham::<float64x2_t, f64>(b, len);
+            });
+            group.bench_function(BenchmarkId::new("radix4_old", len), |b| {
+                bench_planned_f64(b, len);
+            });
+        }
+    }
+}
+
 
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -307,6 +351,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, neon_compare_stockham
 }
 criterion_main!(benches);
