@@ -14,11 +14,10 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
-    let mut buffer_in = vec![Complex::zero(); len];
-    let mut buffer_out = vec![Complex::zero(); len];
+    let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut scratch);
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
 fn bench_planned_f64(b: &mut Bencher, len: usize) {
@@ -26,11 +25,10 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
-    let mut buffer_in = vec![Complex::zero(); len];
-    let mut buffer_out = vec![Complex::zero(); len];
+    let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut scratch);
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
 
@@ -125,10 +123,9 @@ fn bench_groups(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("sse_planned64_p2");
 
-        let base_len = 32;
-        for k in 1..12 {
-            let len = base_len * 4usize.pow(k);
-            group.bench_with_input(BenchmarkId::new("planned", len), &len, |b, _| {
+        for p2 in [8, 12, 16, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("radix4_new", len), |b| {
                 bench_planned_f64(b, len);
             });
         }
@@ -136,10 +133,9 @@ fn bench_groups(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("sse_planned32_p2");
 
-        let base_len = 32;
-        for k in 1..12 {
-            let len = base_len * 4usize.pow(k);
-            group.bench_with_input(BenchmarkId::new("planned", len), &len, |b, _| {
+        for p2 in [8, 12, 16, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("radix4_new", len), |b| {
                 bench_planned_f32(b, len);
             });
         }
