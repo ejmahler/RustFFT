@@ -123,7 +123,7 @@ fn bench_groups(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("sse_planned64_p2");
 
-        for p2 in [8, 12, 16, 20, 21, 22, 23, 24, 28] {
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
             let len = 2usize.pow(p2);
             group.bench_function(BenchmarkId::new("radix4_new", len), |b| {
                 bench_planned_f64(b, len);
@@ -133,7 +133,7 @@ fn bench_groups(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("sse_planned32_p2");
 
-        for p2 in [8, 12, 16, 20, 21, 22, 23, 24, 28] {
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
             let len = 2usize.pow(p2);
             group.bench_function(BenchmarkId::new("radix4_new", len), |b| {
                 bench_planned_f32(b, len);
