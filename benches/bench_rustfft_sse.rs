@@ -204,12 +204,12 @@ fn sse_compare_stockham(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("compare_stockham_f32");
 
-        for power2 in [8, 12, 16, 20, 24, 28] {
-            let len = 2usize.pow(power2);
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
             group.bench_function(BenchmarkId::new("stockham", len), |b| {
                 bench_stockham::<__m128, f32>(b, len);
             });
-            group.bench_function(BenchmarkId::new("planned", len), |b| {
+            group.bench_function(BenchmarkId::new("radix4_old", len), |b| {
                 bench_planned_f32(b, len);
             });
         }
@@ -217,18 +217,17 @@ fn sse_compare_stockham(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("compare_stockham_f64");
 
-        for power2 in [8, 12, 16, 20, 24, 28] {
-            let len = 2usize.pow(power2);
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
             group.bench_function(BenchmarkId::new("stockham", len), |b| {
                 bench_stockham::<__m128d, f64>(b, len);
             });
-            group.bench_function(BenchmarkId::new("planned", len), |b| {
+            group.bench_function(BenchmarkId::new("radix4_old", len), |b| {
                 bench_planned_f64(b, len);
             });
         }
     }
 }
-
 
 fn criterion_benchmark(c: &mut Criterion) {
     config::register_benchmarks!(
