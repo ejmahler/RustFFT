@@ -35,7 +35,8 @@ struct Pass<T> {
 }
 
 pub struct SimdStockham<V: SimdVector, T> {
-    first: FirstPass<V>,
+    /// A `first_pass` for the first pass, or none if it's the first of `passes` (stride 1).
+    first: Option<FirstPass<V>>,
     passes: Box<[Pass<V::ScalarType>]>,
 
     butterfly2: V::Butterfly2,
@@ -78,7 +79,17 @@ fn place<'a, C>(slice: &'a mut [C], previous: &[C]) -> &'a mut [C] {
 impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
     /// Preallocates the twiddles for a `len`-point FFT computed with passes of `radixes`, the
     /// first pass first. `len` is a power of two of at least 16 and the product of `radixes`.
-    pub fn new(len: usize, direction: FftDirection, radixes: &[usize]) -> Self {
+    ///
+    /// Vectors of two complex numbers always run the first pass with `first_pass`. For vectors of
+    /// one, `lane_first_pass` chooses between `first_pass` and a regular pass of stride 1. With NEON
+    /// f64 on Apple M4, the later passes run up to 20% slower after a `first_pass`, so NEON passes
+    /// false. FCMA is a little faster with `first_pass`.
+    pub fn new(
+        len: usize,
+        direction: FftDirection,
+        radixes: &[usize],
+        lane_first_pass: bool,
+    ) -> Self {
         assert_eq!(TypeId::of::<V::ScalarType>(), TypeId::of::<T>());
         assert!(
             len.is_power_of_two() && len >= 16,
@@ -93,25 +104,29 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
         assert!(V::COMPLEX_PER_VECTOR <= 2);
 
         let lanes = V::COMPLEX_PER_VECTOR;
-        let radix = radixes[0];
-        let rows = len / radix;
-        let mut twiddles = Vec::with_capacity(rows / lanes * (radix - 1));
-        for row in (0..rows).step_by(lanes) {
-            for output in 1..radix {
-                let lane_twiddles: [Complex<V::ScalarType>; 2] = std::array::from_fn(|lane| {
-                    compute_twiddle((row + lane) * output, len, direction)
-                });
-                twiddles.push(unsafe { V::make_twiddle(&lane_twiddles[..lanes]) });
+        let (first, rest, mut span, mut stride) = if lanes > 1 || lane_first_pass {
+            let radix = radixes[0];
+            let rows = len / radix;
+            let mut twiddles = Vec::with_capacity(rows / lanes * (radix - 1));
+            for row in (0..rows).step_by(lanes) {
+                for output in 1..radix {
+                    let lane_twiddles: [Complex<V::ScalarType>; 2] = std::array::from_fn(|lane| {
+                        compute_twiddle((row + lane) * output, len, direction)
+                    });
+                    twiddles.push(unsafe { V::make_twiddle(&lane_twiddles[..lanes]) });
+                }
             }
-        }
-        let first = FirstPass {
-            radix,
-            twiddles: twiddles.into_boxed_slice(),
+            let first = FirstPass {
+                radix,
+                twiddles: twiddles.into_boxed_slice(),
+            };
+            (Some(first), &radixes[1..], rows, radix)
+        } else {
+            (None, radixes, len, 1)
         };
 
-        let (mut span, mut stride) = (rows, radix);
-        let mut passes = Vec::with_capacity(radixes.len() - 1);
-        for &radix in &radixes[1..] {
+        let mut passes = Vec::with_capacity(rest.len());
+        for &radix in rest {
             let rows = span / radix;
             let mut twiddles = Vec::new();
             if rows > 1 {
@@ -205,7 +220,7 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
     }
 
     fn pass_count(&self) -> usize {
-        self.passes.len() + 1
+        self.passes.len() + usize::from(self.first.is_some())
     }
 
     /// Runs every pass but the last: the first reading `input`, the others going back and forth
@@ -234,20 +249,24 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
         output: &mut [Complex<V::ScalarType>],
     ) {
         let buffer = DoubleBuf { input, output };
-        if index == 0 {
-            let (len, twiddles) = (self.len, &self.first.twiddles);
-            unsafe {
-                match self.first.radix {
-                    2 => first_pass(&self.butterfly2, len, twiddles, buffer),
-                    4 => first_pass(&self.butterfly4, len, twiddles, buffer),
-                    8 => first_pass(&self.butterfly8, len, twiddles, buffer),
-                    16 => first_pass(&self.butterfly16, len, twiddles, buffer),
-                    _ => unreachable!(),
+        let index = match &self.first {
+            Some(first) if index == 0 => {
+                let (len, twiddles) = (self.len, &first.twiddles);
+                unsafe {
+                    match first.radix {
+                        2 => first_pass(&self.butterfly2, len, twiddles, buffer),
+                        4 => first_pass(&self.butterfly4, len, twiddles, buffer),
+                        8 => first_pass(&self.butterfly8, len, twiddles, buffer),
+                        16 => first_pass(&self.butterfly16, len, twiddles, buffer),
+                        _ => unreachable!(),
+                    }
                 }
+                return;
             }
-            return;
-        }
-        let pass = &self.passes[index - 1];
+            Some(_) => index - 1,
+            None => index,
+        };
+        let pass = &self.passes[index];
         unsafe {
             match pass.radix {
                 2 => later_pass(&self.butterfly2, pass, buffer),

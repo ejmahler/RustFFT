@@ -8,7 +8,12 @@ pub struct WasmSimdStockham<V: SimdVector, T: FftNum>(SimdStockham<V, T>);
 
 impl<V: SimdVector, T: FftNum> WasmSimdStockham<V, T> {
     pub fn new(len: usize, direction: FftDirection) -> Self {
-        Self(SimdStockham::new(len, direction, &unfused_radixes(len)))
+        Self(SimdStockham::new(
+            len,
+            direction,
+            &unfused_radixes(len),
+            true,
+        ))
     }
 }
 boilerplate_simd_fft!(WasmSimdStockham, #[target_feature(enable = "simd128")]);

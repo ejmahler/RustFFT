@@ -12,6 +12,7 @@ impl<V: SimdVector, T: FftNum> FcmaStockham<V, T> {
             len,
             direction,
             &fused_radixes(len, V::COMPLEX_PER_VECTOR),
+            true,
         ))
     }
 }
