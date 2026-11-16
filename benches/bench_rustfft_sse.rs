@@ -1,10 +1,13 @@
-use rustfft::num_complex::Complex;
+use rustfft::simd::simd_vector::SimdVector;
+use rustfft::sse::sse_stockham::SseStockham;
+use rustfft::{FftNum, num_complex::Complex};
 use rustfft::num_traits::Zero;
 use rustfft::Fft;
 use std::sync::Arc;
 mod config;
+use std::arch::x86_64::__m128;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -186,7 +189,32 @@ fn sse_planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100
 fn sse_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
 fn sse_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
 
+fn bench_stockham<V: SimdVector, T: FftNum>(b: &mut Bencher, len: usize) {
+    let fft: Arc<dyn Fft<T>> = Arc::new(SseStockham::<V, T>::new(len, rustfft::FftDirection::Forward));
+    assert_eq!(fft.len(), len);
 
+    let mut buffer = vec![Complex::zero(); len];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+fn sse_compare_stockham(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("sse_stockham");
+
+        for power2 in [12, 16, 20, 24] {
+            let len = 2usize.pow(power2);
+            group.bench_function(BenchmarkId::new("stockham", len), |b| {
+                bench_stockham::<__m128, f32>(b, len);
+            });
+            group.bench_function(BenchmarkId::new("planned", len), |b| {
+                bench_planned_f32(b, len);
+            });
+        }
+    }
+}
 
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -310,6 +338,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, sse_compare_stockham
 }
 criterion_main!(benches);
