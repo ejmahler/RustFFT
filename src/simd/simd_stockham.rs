@@ -62,13 +62,13 @@ const CACHE_LINE: usize = 64;
 
 /// How many elements `place()` may skip at most, so how much longer than the buffer it places
 /// the slice it's given has to be.
-const fn placement_padding<C>() -> usize {
+pub const fn placement_padding<C>() -> usize {
     ALIASING_PERIOD / std::mem::size_of::<C>()
 }
 
 /// The tail of `slice` starting `GAP` bytes, modulo `ALIASING_PERIOD`, after the start of
 /// `previous`, the buffer read by the pass that writes this one.
-fn place<'a, C>(slice: &'a mut [C], previous: &[C]) -> &'a mut [C] {
+pub fn place<'a, C>(slice: &'a mut [C], previous: &[C]) -> &'a mut [C] {
     let target = (previous.as_ptr() as usize + GAP) % ALIASING_PERIOD / CACHE_LINE * CACHE_LINE;
     let at = slice.as_ptr() as usize % ALIASING_PERIOD;
     let skip = (target + ALIASING_PERIOD - at) % ALIASING_PERIOD;

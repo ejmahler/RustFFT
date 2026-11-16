@@ -5,7 +5,7 @@ use rustfft::num_traits::Zero;
 use rustfft::Fft;
 use std::sync::Arc;
 mod config;
-use std::arch::x86_64::__m128;
+use std::arch::x86_64::{__m128, __m128d};
 
 use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -202,15 +202,28 @@ fn bench_stockham<V: SimdVector, T: FftNum>(b: &mut Bencher, len: usize) {
 
 fn sse_compare_stockham(c: &mut Criterion) {
     {
-        let mut group = c.benchmark_group("sse_stockham");
+        let mut group = c.benchmark_group("compare_stockham_f32");
 
-        for power2 in [12, 16, 20, 24] {
+        for power2 in [8, 12, 16, 20, 24, 28] {
             let len = 2usize.pow(power2);
             group.bench_function(BenchmarkId::new("stockham", len), |b| {
                 bench_stockham::<__m128, f32>(b, len);
             });
             group.bench_function(BenchmarkId::new("planned", len), |b| {
                 bench_planned_f32(b, len);
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("compare_stockham_f64");
+
+        for power2 in [8, 12, 16, 20, 24, 28] {
+            let len = 2usize.pow(power2);
+            group.bench_function(BenchmarkId::new("stockham", len), |b| {
+                bench_stockham::<__m128d, f64>(b, len);
+            });
+            group.bench_function(BenchmarkId::new("planned", len), |b| {
+                bench_planned_f64(b, len);
             });
         }
     }
