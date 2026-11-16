@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::sse::sse_radix4::SseRadix4;
+use crate::sse::sse_radixn::SseRadixN;
 use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
 use crate::Fft;
@@ -15,9 +16,11 @@ use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies;
 use crate::sse::sse_raders::SseRaders;
 
-use crate::math_utils::{PrimeFactor, PrimeFactors};
+use crate::common::RadixFactor;
+use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
+const MAX_RADIXN_FACTOR: usize = 7; // the largest factor a RadixN layer can handle
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
@@ -53,6 +56,10 @@ pub enum Recipe {
         k: u32,
         base_fft: Arc<Recipe>,
     },
+    RadixN {
+        factors: Box<[RadixFactor]>,
+        base_fft: Arc<Recipe>,
+    },
     Butterfly1,
     Butterfly2,
     Butterfly3,
@@ -77,6 +84,9 @@ impl Recipe {
         match self {
             Recipe::Dft(length) => *length,
             Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
+            Recipe::RadixN { factors, base_fft } => {
+                base_fft.len() * factors.iter().map(|f| f.radix()).product::<usize>()
+            }
             Recipe::Butterfly1 => 1,
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
@@ -268,6 +278,16 @@ impl<T: FftNum> FftPlannerSse<T> {
                     Arc::new(SseRadix4::<__m128, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
                     Arc::new(SseRadix4::<__m128d, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::RadixN { factors, base_fft } => {
+                let base_fft = self.build_fft(base_fft, direction);
+                if id_t == id_f32 {
+                    Arc::new(SseRadixN::<__m128, T>::new(factors, base_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SseRadixN::<__m128d, T>::new(factors, base_fft)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -465,6 +485,8 @@ impl<T: FftNum> FftPlannerSse<T> {
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
             if factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2 {
                 self.design_radix4(factors)
+            } else if factors.has_factors_leq(MAX_RADIXN_FACTOR) {
+                self.design_radixn(factors)
             } else {
                 let non_power_of_two = factors
                     .remove_factors(PrimeFactor {
@@ -499,10 +521,57 @@ impl<T: FftNum> FftPlannerSse<T> {
                     return self.design_mixed_radix(fact_l, fact_r);
                 }
             }
+            if factors.has_factors_leq(MAX_RADIXN_FACTOR) {
+                return self.design_radixn(factors);
+            }
             // Not possible with just butterflies, go with the general solution.
             let (left_factors, right_factors) = factors.partition_factors();
             self.design_mixed_radix(left_factors, right_factors)
         }
+    }
+
+    /// A base butterfly for the factors RadixN can't take, then cross layers for the rest. The
+    /// same layering the scalar planner uses, with bases picked from this planner's butterflies.
+    fn design_radixn(&mut self, factors: PrimeFactors) -> Arc<Recipe> {
+        let p2 = factors.get_power_of(2);
+        let p3 = factors.get_power_of(3);
+        let p5 = factors.get_power_of(5);
+        let p7 = factors.get_power_of(7);
+
+        let base_len: usize = if factors.has_factors_gt(MAX_RADIXN_FACTOR) {
+            factors.product_above(MAX_RADIXN_FACTOR)
+        } else if p2 > 0 && p3 > 0 {
+            match p2.saturating_sub(p3) {
+                0 => 6,
+                1 => 12,
+                _ => 24,
+            }
+        } else if p3 > 1 {
+            9
+        } else if p2 > 0 && p5 > 0 {
+            10
+        } else if p3 > 0 && p5 > 0 {
+            15
+        } else if p7 > 0 {
+            7
+        } else if p5 > 0 {
+            5
+        } else {
+            3
+        };
+
+        let base_fft = self.design_fft_for_len(base_len);
+        let cross_len = factors.get_product() / base_len;
+        let cross_bits = cross_len.trailing_zeros();
+        if cross_len.is_power_of_two() && cross_bits.is_multiple_of(2) {
+            return Arc::new(Recipe::Radix4 {
+                k: cross_bits / 2,
+                base_fft,
+            });
+        }
+        let factors = split_cross_len(cross_len)
+            .expect("every factor RadixN can't handle went into the base");
+        Arc::new(Recipe::RadixN { factors, base_fft })
     }
 
     fn design_mixed_radix(
@@ -737,8 +806,8 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_sse_mixedradix() {
-        // Products of several different primes should become MixedRadix
+    fn test_plan_sse_radixn() {
+        // Products of several different small primes should become RadixN
         let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for pow2 in 2..5 {
             for pow3 in 2..5 {
@@ -749,7 +818,11 @@ mod unit_tests {
                             * 5usize.pow(pow5)
                             * 7usize.pow(pow7);
                         let plan = planner.design_fft_for_len(len);
-                        assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
+                        assert!(
+                            matches!(*plan, Recipe::RadixN { .. }),
+                            "Expected RadixN, got {:?}",
+                            plan
+                        );
                         assert_eq!(plan.len(), len, "Recipe reports wrong length");
                     }
                 }
@@ -758,10 +831,21 @@ mod unit_tests {
     }
 
     #[test]
+    fn test_plan_sse_mixedradix() {
+        // Products of primes too large for RadixN still split into MixedRadix
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
+        for len in [11 * 13 * 17 * 19, 23 * 29 * 31 * 37] {
+            let plan = planner.design_fft_for_len(len);
+            assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
+            assert_eq!(plan.len(), len, "Recipe reports wrong length");
+        }
+    }
+
+    #[test]
     fn test_plan_sse_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlannerSse::<f64>::new().unwrap();
-        for len in [5 * 20, 5 * 25].iter() {
+        for len in [5 * 20, 12 * 12].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_mixedradixsmall(&plan),
