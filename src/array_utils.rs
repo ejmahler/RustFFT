@@ -548,16 +548,13 @@ pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> u
 /// Allows callers to construct an Arc<[T]> and then take slices over it.
 pub struct ArcSlice<T> {
     data: Arc<[T]>,
-    slice_range: std::range::Range<usize>,
+    slice_range: std::ops::Range<usize>,
 }
 
 impl<T> ArcSlice<T> {
     pub fn new(data: Arc<[T]>, slice_range: std::ops::Range<usize>) -> Self {
         assert!(slice_range.start <= data.len() && slice_range.end <= data.len());
-        Self {
-            data,
-            slice_range: slice_range.into(),
-        }
+        Self { data, slice_range }
     }
 }
 impl<T> Deref for ArcSlice<T> {
@@ -565,7 +562,7 @@ impl<T> Deref for ArcSlice<T> {
 
     fn deref(&self) -> &Self::Target {
         // SAFETY: We asserted in `new()` that `self.slice_range` is a valid range for this slice
-        unsafe { self.data.get_unchecked(self.slice_range) }
+        unsafe { self.data.get_unchecked(self.slice_range.clone()) }
     }
 }
 

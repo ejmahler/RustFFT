@@ -263,9 +263,15 @@ impl<T: FftNum> FftPlannerNeon<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(NeonRadix4::<float32x4_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    // SAFETY: The neon target feature must be present, which we checked in `new()`
+                    unsafe {
+                        Arc::new(NeonRadix4::<float32x4_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    }
                 } else if id_t == id_f64 {
-                    Arc::new(NeonRadix4::<float64x2_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    // SAFETY: The neon target feature must be present, which we checked in `new()`
+                    unsafe {
+                        Arc::new(NeonRadix4::<float64x2_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    }
                 } else {
                     panic!("Not f32 or f64");
                 }

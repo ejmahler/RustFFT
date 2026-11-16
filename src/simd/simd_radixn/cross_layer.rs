@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{
-    ArcSlice, DoubleBuf, choose_scratch, workaround_transmute, workaround_transmute_mut,
-};
+use crate::array_utils::{ArcSlice, workaround_transmute_mut};
 use crate::simd::parallel_fft::ParallelFft;
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
@@ -83,11 +81,17 @@ impl<V: SimdVector, T: FftNum, const RADIX: usize, B: ParallelFft<V, RADIX>>
 
     #[inline(always)]
     pub fn process_layer(&self, mut buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let small_layer = buffer.len() <= 4096;
+        if small_layer {
+            unsafe { self.child_fft.process_layer(buffer, scratch) };
+        }
         let inner_fft_len = self.cross_fft_len / RADIX;
         while let Some((chunk, remainder)) = buffer.split_at_mut_checked(self.cross_fft_len) {
             buffer = remainder;
 
-            unsafe { self.child_fft.process_layer(chunk, scratch) };
+            if !small_layer {
+                unsafe { self.child_fft.process_layer(chunk, scratch) };
+            }
 
             // Now that the children are done, handle this layer's cross ffts
             let chunk = unsafe { workaround_transmute_mut(chunk) };
@@ -104,6 +108,14 @@ impl<V: SimdVector, T: FftNum, const RADIX: usize, B: ParallelFft<V, RADIX>>
         mut output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
+        let small_layer = input.len() <= 4096;
+        if small_layer {
+            unsafe {
+                self.child_fft
+                    .process_layer_outofplace(input, output, scratch);
+            };
+        }
+
         let inner_fft_len = self.cross_fft_len / RADIX;
         while let (Some((chunk_in, remainder_in)), Some((chunk_out, remainder_out))) = (
             input.split_at_mut_checked(self.cross_fft_len),
@@ -112,18 +124,17 @@ impl<V: SimdVector, T: FftNum, const RADIX: usize, B: ParallelFft<V, RADIX>>
             input = remainder_in;
             output = remainder_out;
 
-            unsafe {
-                self.child_fft
-                    .process_layer(chunk_in, choose_scratch(output, scratch))
-            };
+            if !small_layer {
+                unsafe {
+                    self.child_fft
+                        .process_layer_outofplace(chunk_in, chunk_out, scratch);
+                };
+            }
 
             // Now that the children are done, handle this layer's cross ffts
-            let buffer = DoubleBuf {
-                input: unsafe { workaround_transmute(chunk_in) },
-                output: unsafe { workaround_transmute_mut(chunk_out) },
-            };
+            let chunk = unsafe { workaround_transmute_mut(chunk_out) };
             unsafe {
-                cross_layer::<V, RADIX>(buffer, &self.twiddles, inner_fft_len, &self.butterfly)
+                cross_layer::<V, RADIX>(chunk, &self.twiddles, inner_fft_len, &self.butterfly)
             }
         }
     }

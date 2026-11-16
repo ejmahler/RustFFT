@@ -6,27 +6,41 @@
 
 use std::sync::Arc;
 
+use num_complex::Complex;
+
 use crate::{
-    Fft, FftNum,
-    common::RadixFactor,
-    simd::{simd_radixn::SimdRadixN, simd_vector::SimdVector},
+    Fft, FftDirection, FftNum,
+    array_utils::ArcSlice,
+    simd::{
+        simd_radixn::{
+            cross_layer::{
+                CrossLayer, LayerFactory, LayerInstance, boilerplate_simd_radixn,
+                boilerplate_simd_radixn_layer,
+            },
+            radix_factor::RadixFactor,
+            radixn::SimdRadixN,
+        },
+        simd_vector::SimdVector,
+    },
 };
 
 pub struct NeonRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);
 
 impl<V: SimdVector, T: FftNum> NeonRadixN<V, T> {
     #[allow(dead_code)]
+    #[target_feature(enable = "neon")]
     pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
-        Self(SimdRadixN::new(factors, base_fft))
+        Self(SimdRadixN::new(factors, base_fft, NeonLayerFactory))
     }
 }
-boilerplate_simd_fft!(NeonRadixN, #[inline(always)]);
+boilerplate_simd_fft!(NeonRadixN, #[target_feature(enable = "neon")]);
+boilerplate_simd_radixn!(NeonLayerFactory, #[target_feature(enable = "neon")]);
 
 #[cfg(test)]
 mod unit_tests {
     use crate::Fft;
-    use crate::common::RadixFactor;
-    use crate::simd::simd_radixn::test_bodies;
+    use crate::simd::simd_radixn::radix_factor::RadixFactor;
+    use crate::simd::simd_radixn::radixn::test_bodies;
     use std::arch::aarch64::{float32x4_t, float64x2_t};
 
     use super::*;
@@ -35,7 +49,8 @@ mod unit_tests {
         factors: &[RadixFactor],
         base_fft: Arc<dyn Fft<V::ScalarType>>,
     ) -> Arc<dyn Fft<V::ScalarType>> {
-        Arc::new(NeonRadixN::<V, V::ScalarType>::new(factors, base_fft))
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+        unsafe { Arc::new(NeonRadixN::<V, V::ScalarType>::new(factors, base_fft)) }
     }
 
     #[test]

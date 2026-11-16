@@ -4,7 +4,7 @@ use rustfft::Fft;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{criterion_group, criterion_main, Bencher, Criterion, BenchmarkId};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -118,30 +118,6 @@ fn neon_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
 fn neon_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
 fn neon_butterfly64_32(b: &mut Bencher) { bench_planned_multi_f64(b, 32);}
 
-// Powers of 2
-fn neon_planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b, 64); }
-fn neon_planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b, 128); }
-fn neon_planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b, 256); }
-fn neon_planned32_p2_00000512(b: &mut Bencher) { bench_planned_f32(b, 512); }
-fn neon_planned32_p2_00001024(b: &mut Bencher) { bench_planned_f32(b, 1024); }
-fn neon_planned32_p2_00002048(b: &mut Bencher) { bench_planned_f32(b, 2048); }
-fn neon_planned32_p2_00004096(b: &mut Bencher) { bench_planned_f32(b, 4096); }
-fn neon_planned32_p2_00016384(b: &mut Bencher) { bench_planned_f32(b, 16384); }
-fn neon_planned32_p2_00065536(b: &mut Bencher) { bench_planned_f32(b, 65536); }
-fn neon_planned32_p2_01048576(b: &mut Bencher) { bench_planned_f32(b, 1048576); }
-
-fn neon_planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b, 64); }
-fn neon_planned64_p2_00000128(b: &mut Bencher) { bench_planned_f64(b, 128); }
-fn neon_planned64_p2_00000256(b: &mut Bencher) { bench_planned_f64(b, 256); }
-fn neon_planned64_p2_00000512(b: &mut Bencher) { bench_planned_f64(b, 512); }
-fn neon_planned64_p2_00001024(b: &mut Bencher) { bench_planned_f64(b, 1024); }
-fn neon_planned64_p2_00002048(b: &mut Bencher) { bench_planned_f64(b, 2048); }
-fn neon_planned64_p2_00004096(b: &mut Bencher) { bench_planned_f64(b, 4096); }
-fn neon_planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b, 16384); }
-fn neon_planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b, 65536); }
-fn neon_planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b, 1048576); }
-
-
 // Powers of 7
 fn neon_planned32_p7_00343(b: &mut Bencher) { bench_planned_f32(b,   343); }
 fn neon_planned32_p7_02401(b: &mut Bencher) { bench_planned_f32(b,  2401); }
@@ -185,7 +161,28 @@ fn neon_planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  4410
 fn neon_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
 fn neon_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
 
+fn bench_groups(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("neon_planned64_p2");
 
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("radix4_new", len), |b| {
+                bench_planned_f64(b, len);
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("neon_planned32_p2");
+
+        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("radix4_new", len), |b| {
+                bench_planned_f32(b, len);
+            });
+        }
+    }
+}
 
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -247,26 +244,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         neon_butterfly64_29,
         neon_butterfly64_31,
         neon_butterfly64_32,
-        neon_planned32_p2_00000064,
-        neon_planned32_p2_00000128,
-        neon_planned32_p2_00000256,
-        neon_planned32_p2_00000512,
-        neon_planned32_p2_00001024,
-        neon_planned32_p2_00002048,
-        neon_planned32_p2_00004096,
-        neon_planned32_p2_00016384,
-        neon_planned32_p2_00065536,
-        neon_planned32_p2_01048576,
-        neon_planned64_p2_00000064,
-        neon_planned64_p2_00000128,
-        neon_planned64_p2_00000256,
-        neon_planned64_p2_00000512,
-        neon_planned64_p2_00001024,
-        neon_planned64_p2_00002048,
-        neon_planned64_p2_00004096,
-        neon_planned64_p2_00016384,
-        neon_planned64_p2_00065536,
-        neon_planned64_p2_01048576,
         neon_planned32_p7_00343,
         neon_planned32_p7_02401,
         neon_planned32_p7_16807,
@@ -307,6 +284,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, bench_groups
 }
 criterion_main!(benches);

@@ -6,21 +6,21 @@
 
 use std::sync::Arc;
 
-use crate::{
-    Fft, FftNum,
-    simd::{simd_radix4::SimdRadix4, simd_vector::SimdVector},
-};
+use super::neon_radixn::NeonLayerFactory;
+use crate::{Fft, FftNum, simd::simd_radixn::radix4::SimdRadix4, simd::simd_vector::SimdVector};
+
 pub struct NeonRadix4<V: SimdVector, T: FftNum>(SimdRadix4<V, T>);
-impl<V: SimdVector, T: FftNum> NeonRadix4<V, T> {
+impl<V: SimdVector + 'static, T: FftNum> NeonRadix4<V, T> {
+    #[target_feature(enable = "neon")]
     pub fn new(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
-        Self(SimdRadix4::new(k, base_fft))
+        Self(SimdRadix4::new(k, base_fft, NeonLayerFactory))
     }
 }
 boilerplate_simd_fft!(NeonRadix4, #[target_feature(enable = "neon")]);
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::simd::simd_radix4::test_bodies;
+    use crate::simd::simd_radixn::radix4::test_bodies;
     use std::arch::aarch64::{float32x4_t, float64x2_t};
 
     use super::*;
@@ -29,7 +29,8 @@ mod unit_tests {
         k: u32,
         base_fft: Arc<dyn Fft<V::ScalarType>>,
     ) -> Arc<dyn Fft<V::ScalarType>> {
-        Arc::new(NeonRadix4::<V, V::ScalarType>::new(k, base_fft))
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+        unsafe { Arc::new(NeonRadix4::<V, V::ScalarType>::new(k, base_fft)) }
     }
 
     #[test]
