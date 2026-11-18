@@ -4,16 +4,11 @@ use crate::simd::simd_stockham::{SimdStockham, unfused_radixes};
 use crate::simd::simd_vector::SimdVector;
 use crate::{Fft, FftDirection, FftNum};
 
-pub struct WasmSimdStockham<V: SimdVector, T: FftNum>(SimdStockham<V, T>);
+pub struct WasmSimdStockham<V: SimdVector, T: FftNum>(SimdStockham<V, T, true>);
 
 impl<V: SimdVector, T: FftNum> WasmSimdStockham<V, T> {
     pub fn new(len: usize, direction: FftDirection) -> Self {
-        Self(SimdStockham::new(
-            len,
-            direction,
-            &unfused_radixes(len),
-            true,
-        ))
+        Self(SimdStockham::new(len, direction, &unfused_radixes(len)))
     }
 }
 boilerplate_simd_fft!(WasmSimdStockham, #[target_feature(enable = "simd128")]);

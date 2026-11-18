@@ -4,7 +4,7 @@ use crate::simd::simd_stockham::{SimdStockham, fused_radixes};
 use crate::simd::simd_vector::SimdVector;
 use crate::{Fft, FftDirection, FftNum};
 
-pub struct FcmaStockham<V: SimdVector, T: FftNum>(SimdStockham<V, T>);
+pub struct FcmaStockham<V: SimdVector, T: FftNum>(SimdStockham<V, T, true>);
 
 impl<V: SimdVector, T: FftNum> FcmaStockham<V, T> {
     pub fn new(len: usize, direction: FftDirection) -> Self {
@@ -12,7 +12,6 @@ impl<V: SimdVector, T: FftNum> FcmaStockham<V, T> {
             len,
             direction,
             &fused_radixes(len, V::COMPLEX_PER_VECTOR),
-            true,
         ))
     }
 }

@@ -17,27 +17,28 @@ use crate::simd::simd_vector::SimdVector;
 use crate::twiddles::compute_twiddle;
 use crate::{FftDirection, FftNum};
 
-/// The first pass, whose butterflies each own a lane and so need a twiddle factor per lane.
-struct FirstPass<V: SimdVector> {
-    radix: usize,
-    /// `radix - 1` per vector of rows.
-    twiddles: Box<[V::Twiddle]>,
-}
-
 /// A later pass, whose butterflies span every lane: `rows` of them, each `stride` complex numbers
 /// wide. Every butterfly of a row shares its twiddle factors.
-struct Pass<T> {
+struct Pass {
     radix: usize,
     rows: usize,
     stride: usize,
-    /// `radix - 1` per row, or none if there is only one row.
-    twiddles: Box<[Complex<T>]>,
+    /// Where this pass's twiddles start in `SimdStockham::twiddles`: `radix - 1` per row, or none
+    /// if there is only one row.
+    twiddle_start: usize,
 }
 
-pub struct SimdStockham<V: SimdVector, T> {
-    /// A `first_pass` for the first pass, or none if it's the first of `passes` (stride 1).
-    first: Option<FirstPass<V>>,
-    passes: Box<[Pass<V::ScalarType>]>,
+/// A Stockham FFT whose first pass is done by `first_pass` if `FIRST_PASS` is true or a vector
+/// holds more than one complex number, and by a regular pass of stride 1 otherwise. With NEON f64
+/// on Apple M4, the later passes run up to 20% slower after a `first_pass`, so NEON passes false.
+/// FCMA is a little faster with `first_pass`.
+pub struct SimdStockham<V: SimdVector, T, const FIRST_PASS: bool> {
+    /// The twiddles of `first_pass`, `radix - 1` per vector of rows. Empty if there is none.
+    first_twiddles: Box<[V::Twiddle]>,
+    /// The twiddles of every pass in `passes`, in one allocation.
+    twiddles: Box<[Complex<V::ScalarType>]>,
+    /// Every pass, the first first. If there is a `first_pass`, only its radix is used.
+    passes: Box<[Pass]>,
 
     butterfly2: V::Butterfly2,
     butterfly4: V::Butterfly4,
@@ -49,8 +50,10 @@ pub struct SimdStockham<V: SimdVector, T> {
     _phantom: PhantomData<T>,
 }
 
-/// Consecutive passes read and write buffers whose addresses differ by `GAP` bytes modulo
-/// `ALIASING_PERIOD`, rounded down to a cache line.
+/// The buffers that passes go back and forth between start `GAP` bytes apart modulo
+/// `ALIASING_PERIOD`, rounded down to a cache line. Half the period is the same distance in both
+/// directions. With 1 KiB, which was used when every pass wrote a new buffer, NEON was up to 8%
+/// slower on Apple M4 once passes went back and forth between two buffers.
 ///
 /// A pass reads and writes its two buffers in lockstep. If both start at the same offset into a
 /// 4 KiB page, as large allocations tend to, every load and the store next to it map onto the
@@ -58,7 +61,7 @@ pub struct SimdStockham<V: SimdVector, T> {
 /// store also waits for that store ("4K aliasing"). Offsetting the buffers avoids both. Without
 /// it, NEON and FCMA are 5 to 9% slower from 2^14 points up on Apple M4.
 const ALIASING_PERIOD: usize = 4096;
-const GAP: usize = 1024;
+const GAP: usize = ALIASING_PERIOD / 2;
 const CACHE_LINE: usize = 64;
 
 /// How many elements `place()` may skip at most, so how much longer than the buffer it places
@@ -67,29 +70,30 @@ const fn placement_padding<C>() -> usize {
     ALIASING_PERIOD / std::mem::size_of::<C>()
 }
 
-/// The tail of `slice` starting `GAP` bytes, modulo `ALIASING_PERIOD`, after the start of
-/// `previous`, the buffer read by the pass that writes this one.
-fn place<'a, C>(slice: &'a mut [C], previous: &[C]) -> &'a mut [C] {
-    let target = (previous.as_ptr() as usize + GAP) % ALIASING_PERIOD / CACHE_LINE * CACHE_LINE;
+/// The first `len` elements of `slice` from `gap` bytes, modulo `ALIASING_PERIOD`, after the
+/// start of `other`, a buffer the passes read it from or write it to.
+fn place<'a, C>(slice: &'a mut [C], other: &[C], gap: usize, len: usize) -> &'a mut [C] {
+    let target = (other.as_ptr() as usize + gap) % ALIASING_PERIOD / CACHE_LINE * CACHE_LINE;
     let at = slice.as_ptr() as usize % ALIASING_PERIOD;
     let skip = (target + ALIASING_PERIOD - at) % ALIASING_PERIOD;
-    &mut slice[skip / std::mem::size_of::<C>()..]
+    &mut slice[skip / std::mem::size_of::<C>()..][..len]
 }
 
-impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
+/// Where the data is during `SimdStockham::run`. `Output`, `Spare` and `Extra` are its three buffers.
+#[derive(Copy, Clone, PartialEq)]
+enum Slot {
+    Input,
+    Output,
+    Spare,
+    Extra,
+}
+
+impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_PASS> {
+    const HAS_FIRST_PASS: bool = FIRST_PASS || V::COMPLEX_PER_VECTOR > 1;
+
     /// Preallocates the twiddles for a `len`-point FFT computed with passes of `radixes`, the
     /// first pass first. `len` is a power of two of at least 16 and the product of `radixes`.
-    ///
-    /// Vectors of two complex numbers always run the first pass with `first_pass`. For vectors of
-    /// one, `lane_first_pass` chooses between `first_pass` and a regular pass of stride 1. With NEON
-    /// f64 on Apple M4, the later passes run up to 20% slower after a `first_pass`, so NEON passes
-    /// false. FCMA is a little faster with `first_pass`.
-    pub fn new(
-        len: usize,
-        direction: FftDirection,
-        radixes: &[usize],
-        lane_first_pass: bool,
-    ) -> Self {
+    pub fn new(len: usize, direction: FftDirection, radixes: &[usize]) -> Self {
         assert_eq!(TypeId::of::<V::ScalarType>(), TypeId::of::<T>());
         assert!(
             len.is_power_of_two() && len >= 16,
@@ -103,34 +107,27 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
         assert!(radixes.len() >= 2, "radixes {radixes:?}");
         assert!(V::COMPLEX_PER_VECTOR <= 2);
 
-        let lanes = V::COMPLEX_PER_VECTOR;
-        let (first, rest, mut span, mut stride) = if lanes > 1 || lane_first_pass {
-            let radix = radixes[0];
-            let rows = len / radix;
-            let mut twiddles = Vec::with_capacity(rows / lanes * (radix - 1));
-            for row in (0..rows).step_by(lanes) {
-                for output in 1..radix {
-                    let lane_twiddles: [Complex<V::ScalarType>; 2] = std::array::from_fn(|lane| {
-                        compute_twiddle((row + lane) * output, len, direction)
-                    });
-                    twiddles.push(unsafe { V::make_twiddle(&lane_twiddles[..lanes]) });
-                }
-            }
-            let first = FirstPass {
-                radix,
-                twiddles: twiddles.into_boxed_slice(),
-            };
-            (Some(first), &radixes[1..], rows, radix)
-        } else {
-            (None, radixes, len, 1)
-        };
-
-        let mut passes = Vec::with_capacity(rest.len());
-        for &radix in rest {
+        let mut first_twiddles = Vec::new();
+        let mut twiddles = Vec::new();
+        let mut passes = Vec::with_capacity(radixes.len());
+        let (mut span, mut stride) = (len, 1);
+        for (index, &radix) in radixes.iter().enumerate() {
             let rows = span / radix;
-            let mut twiddles = Vec::new();
-            if rows > 1 {
-                twiddles.reserve(rows * (radix - 1));
+            let twiddle_start = twiddles.len();
+            if index == 0 && Self::HAS_FIRST_PASS {
+                // Each lane holds its own row, so each needs its own twiddle
+                for row in (0..rows).step_by(V::COMPLEX_PER_VECTOR) {
+                    for output in 1..radix {
+                        let lane_twiddles: [Complex<V::ScalarType>; 2] =
+                            std::array::from_fn(|lane| {
+                                compute_twiddle((row + lane) * output, len, direction)
+                            });
+                        first_twiddles.push(unsafe {
+                            V::make_twiddle(&lane_twiddles[..V::COMPLEX_PER_VECTOR])
+                        });
+                    }
+                }
+            } else if rows > 1 {
                 for row in 0..rows {
                     for output in 1..radix {
                         twiddles.push(compute_twiddle(row * output, span, direction));
@@ -141,7 +138,7 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
                 radix,
                 rows,
                 stride,
-                twiddles: twiddles.into_boxed_slice(),
+                twiddle_start,
             });
             span = rows;
             stride *= radix;
@@ -150,7 +147,8 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
 
         unsafe {
             Self {
-                first,
+                first_twiddles: first_twiddles.into_boxed_slice(),
+                twiddles: twiddles.into_boxed_slice(),
                 passes: passes.into_boxed_slice(),
                 butterfly2: V::make_butterfly2(direction),
                 butterfly4: V::make_butterfly4(direction),
@@ -171,28 +169,47 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
         self.direction
     }
 
-    fn scratch_len(&self) -> usize {
-        2 * (self.len + placement_padding::<Complex<T>>())
+    /// Scratch for `buffers` buffers, each placed by `place()`.
+    fn scratch_len(&self, buffers: usize) -> usize {
+        buffers * (self.len + placement_padding::<Complex<T>>())
     }
 
+    fn odd_pass_count(&self) -> bool {
+        self.passes.len() % 2 == 1
+    }
+
+    /// In place, the passes go back and forth between the buffer and the scratch. That ends in
+    /// the buffer only for an even number of passes, so an odd number needs a second scratch
+    /// buffer, which `run` uses once.
     pub fn get_inplace_scratch_len(&self) -> usize {
-        self.scratch_len()
+        self.scratch_len(if self.odd_pass_count() { 2 } else { 1 })
     }
 
+    /// Out of place, the input is free to use, so the passes go back and forth between it and
+    /// the output. That ends in the output only for an odd number of passes, so an even number
+    /// needs one scratch buffer, which `run` uses once.
     pub fn get_outofplace_scratch_len(&self) -> usize {
-        self.scratch_len()
+        self.scratch_len(if self.odd_pass_count() { 0 } else { 1 })
     }
 
+    /// The first pass reads the input and writes either the output or the scratch, so that the
+    /// passes going back and forth between the two end in the output.
     pub fn get_immutable_scratch_len(&self) -> usize {
-        self.scratch_len()
+        self.scratch_len(1)
     }
 
     #[inline(always)]
     pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let buffer: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(buffer) };
         let scratch: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(scratch) };
-        let src = self.run_all_but_last(buffer, scratch);
-        self.run_pass(self.pass_count() - 1, src, buffer);
+        let (spare, extra) = scratch.split_at_mut(self.scratch_len(1));
+        let spare = place(spare, buffer, GAP, self.len);
+        // `extra` is written from `buffer` and read into `spare`, so it goes half way between
+        let extra = match self.odd_pass_count() {
+            true => place(extra, buffer, GAP / 2, self.len),
+            false => &mut [],
+        };
+        self.run(Slot::Output, &[], buffer, spare, extra);
     }
 
     #[inline(always)]
@@ -202,7 +219,14 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        self.process_single_immutable(input, output, scratch);
+        let input: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(input) };
+        let output: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(output) };
+        let scratch: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(scratch) };
+        let extra = match self.odd_pass_count() {
+            true => &mut [],
+            false => place(scratch, output, GAP, self.len),
+        };
+        self.run(Slot::Spare, &[], output, input, extra);
     }
 
     #[inline(always)]
@@ -215,65 +239,80 @@ impl<V: SimdVector, T: FftNum> SimdStockham<V, T> {
         let input: &[Complex<V::ScalarType>] = unsafe { workaround_transmute(input) };
         let output: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(output) };
         let scratch: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(scratch) };
-        let src = self.run_all_but_last(input, scratch);
-        self.run_pass(self.pass_count() - 1, src, output);
+        let spare = place(scratch, output, GAP, self.len);
+        self.run(Slot::Input, input, output, spare, &mut []);
     }
 
-    fn pass_count(&self) -> usize {
-        self.passes.len() + usize::from(self.first.is_some())
-    }
-
-    /// Runs every pass but the last: the first reading `input`, the others going back and forth
-    /// between two buffers placed in `scratch`. Returns the buffer the last pass reads.
+    /// Runs every pass on the data in `start`, ending in `output`. The passes go back and forth
+    /// between `output` and `spare`. If that would end in the wrong one, the first pass that can
+    /// writes `extra` instead, which is only used by that pass and the next. `extra` may be empty
+    /// if it's not needed.
+    ///
+    /// Every pass goes through the one `run_pass` call here, so each pass function is only
+    /// generated once per caller.
     #[inline(always)]
-    fn run_all_but_last<'a>(
+    fn run(
         &self,
-        input: &[Complex<V::ScalarType>],
-        scratch: &'a mut [Complex<V::ScalarType>],
-    ) -> &'a [Complex<V::ScalarType>] {
-        let (mut src, rest) = place(scratch, input).split_at_mut(self.len);
-        let mut dst = &mut place(rest, src)[..self.len];
-        self.run_pass(0, input, src);
-        for index in 1..self.pass_count() - 1 {
-            self.run_pass(index, src, dst);
-            std::mem::swap(&mut src, &mut dst);
-        }
-        src
-    }
-
-    #[inline(always)]
-    fn run_pass(
-        &self,
-        index: usize,
+        start: Slot,
         input: &[Complex<V::ScalarType>],
         output: &mut [Complex<V::ScalarType>],
+        spare: &mut [Complex<V::ScalarType>],
+        extra: &mut [Complex<V::ScalarType>],
     ) {
-        let buffer = DoubleBuf { input, output };
-        let index = match &self.first {
-            Some(first) if index == 0 => {
-                let (len, twiddles) = (self.len, &first.twiddles);
-                unsafe {
-                    match first.radix {
-                        2 => first_pass(&self.butterfly2, len, twiddles, buffer),
-                        4 => first_pass(&self.butterfly4, len, twiddles, buffer),
-                        8 => first_pass(&self.butterfly8, len, twiddles, buffer),
-                        16 => first_pass(&self.butterfly16, len, twiddles, buffer),
-                        _ => unreachable!(),
-                    }
-                }
-                return;
-            }
-            Some(_) => index - 1,
-            None => index,
-        };
+        let mut source = start;
+        for index in 0..self.passes.len() {
+            // Ending in `output` needs an odd number of passes left when coming from elsewhere
+            let left = self.passes.len() - index;
+            let destination = match (left % 2 == 1, source) {
+                (true, Slot::Output) | (false, Slot::Spare) => Slot::Extra,
+                (true, _) => Slot::Output,
+                (false, _) => Slot::Spare,
+            };
+            let (src, dst): (&[_], &mut [_]) = match (source, destination) {
+                (Slot::Input, Slot::Output) => (input, &mut *output),
+                (Slot::Input, Slot::Spare) => (input, &mut *spare),
+                (Slot::Output, Slot::Spare) => (&*output, &mut *spare),
+                (Slot::Output, Slot::Extra) => (&*output, &mut *extra),
+                (Slot::Spare, Slot::Output) => (&*spare, &mut *output),
+                (Slot::Spare, Slot::Extra) => (&*spare, &mut *extra),
+                (Slot::Extra, Slot::Output) => (&*extra, &mut *output),
+                (Slot::Extra, Slot::Spare) => (&*extra, &mut *spare),
+                _ => unreachable!(),
+            };
+            self.run_pass(
+                index,
+                DoubleBuf {
+                    input: src,
+                    output: dst,
+                },
+            );
+            source = destination;
+        }
+        debug_assert!(source == Slot::Output);
+    }
+
+    #[inline(always)]
+    fn run_pass(&self, index: usize, buffer: DoubleBuf<V::ScalarType>) {
         let pass = &self.passes[index];
         unsafe {
-            match pass.radix {
-                2 => later_pass(&self.butterfly2, pass, buffer),
-                4 => later_pass(&self.butterfly4, pass, buffer),
-                8 => later_pass(&self.butterfly8, pass, buffer),
-                16 => later_pass(&self.butterfly16, pass, buffer),
-                _ => unreachable!(),
+            if Self::HAS_FIRST_PASS && index == 0 {
+                let (len, twiddles) = (self.len, &self.first_twiddles[..]);
+                match pass.radix {
+                    2 => first_pass(&self.butterfly2, len, twiddles, buffer),
+                    4 => first_pass(&self.butterfly4, len, twiddles, buffer),
+                    8 => first_pass(&self.butterfly8, len, twiddles, buffer),
+                    16 => first_pass(&self.butterfly16, len, twiddles, buffer),
+                    _ => unreachable!(),
+                }
+            } else {
+                let twiddles = &self.twiddles[pass.twiddle_start..];
+                match pass.radix {
+                    2 => later_pass(&self.butterfly2, pass, twiddles, buffer),
+                    4 => later_pass(&self.butterfly4, pass, twiddles, buffer),
+                    8 => later_pass(&self.butterfly8, pass, twiddles, buffer),
+                    16 => later_pass(&self.butterfly16, pass, twiddles, buffer),
+                    _ => unreachable!(),
+                }
             }
         }
     }
@@ -402,9 +441,8 @@ unsafe fn first_pass<V: SimdVector, const R: usize>(
 ) {
     unsafe {
         let rows = len / R;
-        let lanes = V::COMPLEX_PER_VECTOR;
         for (index, twiddles) in twiddles.chunks_exact(R - 1).enumerate() {
-            let row = lanes * index;
+            let row = V::COMPLEX_PER_VECTOR * index;
             let mut values = [V::zero_vector(); R];
             for (k, value) in values.iter_mut().enumerate() {
                 *value = buffer.load(row + k * rows);
@@ -413,7 +451,7 @@ unsafe fn first_pass<V: SimdVector, const R: usize>(
             for (value, twiddle) in values[1..].iter_mut().zip(twiddles) {
                 *value = V::mul_twiddle(*value, *twiddle);
             }
-            if lanes == 1 {
+            if V::COMPLEX_PER_VECTOR == 1 {
                 for (j, value) in values.into_iter().enumerate() {
                     buffer.store(value, R * row + j);
                 }
@@ -430,19 +468,19 @@ unsafe fn first_pass<V: SimdVector, const R: usize>(
 }
 
 /// Butterflies reading `x[q + s * (p + k * rows)]` and writing `y[q + s * (R * p + j)]` for row
-/// `p` and lanes `q` of each stride `s`.
+/// `p` and lanes `q` of each stride `s`. `twiddles` starts with the pass's twiddles.
 #[inline(always)]
 unsafe fn later_pass<V: SimdVector, const R: usize>(
     butterfly: &impl ParallelFft<V, R>,
-    pass: &Pass<V::ScalarType>,
+    pass: &Pass,
+    twiddles: &[Complex<V::ScalarType>],
     mut buffer: impl SimdComplexArrayMut<V>,
 ) {
     unsafe {
         let (rows, stride) = (pass.rows, pass.stride);
-        let lanes = V::COMPLEX_PER_VECTOR;
         if rows == 1 {
             // The last pass, whose twiddles are all 1
-            for q in (0..stride).step_by(lanes) {
+            for q in (0..stride).step_by(V::COMPLEX_PER_VECTOR) {
                 let mut values = [V::zero_vector(); R];
                 for (k, value) in values.iter_mut().enumerate() {
                     *value = buffer.load(q + stride * k);
@@ -454,7 +492,7 @@ unsafe fn later_pass<V: SimdVector, const R: usize>(
             }
             return;
         }
-        let twiddles: &[Complex<V::ScalarType>] = &pass.twiddles;
+        let twiddles = &twiddles[..rows * (R - 1)];
         for (row, row_twiddles) in twiddles.chunks_exact(R - 1).enumerate() {
             // Every butterfly of a row shares its twiddles, so broadcast them once per row. The
             // first output's is always 1, so it's neither stored nor applied.
@@ -465,7 +503,7 @@ unsafe fn later_pass<V: SimdVector, const R: usize>(
             }
             let input = stride * row;
             let output = stride * R * row;
-            for q in (0..stride).step_by(lanes) {
+            for q in (0..stride).step_by(V::COMPLEX_PER_VECTOR) {
                 let mut values = [V::zero_vector(); R];
                 for (k, value) in values.iter_mut().enumerate() {
                     *value = buffer.load(input + q + stride * rows * k);
@@ -491,6 +529,8 @@ mod unit_tests {
             for lanes in [1, 2] {
                 let fused = fused_radixes(1 << bits, lanes);
                 assert_eq!(fused.iter().product::<usize>(), 1 << bits, "{fused:?}");
+                let neon = neon_radixes(1 << bits, lanes);
+                assert_eq!(neon.iter().product::<usize>(), 1 << bits, "{neon:?}");
             }
             let unfused = unfused_radixes(1 << bits);
             assert_eq!(unfused.iter().product::<usize>(), 1 << bits, "{unfused:?}");
