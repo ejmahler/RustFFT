@@ -319,7 +319,7 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
 }
 
 /// Radixes for CPUs with fused multiply-add and FCMA, the first pass first, for vectors of
-/// `lanes` complex numbers. Sizes up to 2^16 use the fastest plan measured on Apple M4.
+/// `lanes` complex numbers. Sizes up to 2^26 use the fastest plan measured on Apple M4.
 #[cfg_attr(not(all(target_arch = "aarch64", feature = "fcma")), allow(dead_code))]
 pub fn fused_radixes(len: usize, lanes: usize) -> Vec<usize> {
     let bits = len.trailing_zeros() as usize;
@@ -342,22 +342,35 @@ pub fn fused_radixes(len: usize, lanes: usize) -> Vec<usize> {
         (14, _) => &[4, 8, 8, 8, 8],
         (15, _) => &[8, 8, 8, 8, 8],
         (16, _) => &[4, 8, 8, 8, 8, 4],
+        (17, 1) => &[8, 8, 8, 8, 4, 8],
+        (17, _) => &[4, 4, 8, 8, 8, 4, 4],
+        (18, 1) => &[4, 8, 8, 8, 8, 4, 4],
+        (18, _) => &[4, 4, 8, 8, 8, 4, 8],
+        (19, 1) => &[8, 8, 8, 8, 8, 4, 4],
+        (19, _) => &[4, 4, 8, 8, 8, 4, 4, 4],
+        (20, 1) => &[8, 8, 8, 8, 4, 4, 4, 4],
+        (20, _) => &[4, 4, 8, 8, 8, 8, 4, 4],
+        (21, _) => &[4, 4, 8, 8, 8, 4, 4, 4, 4],
+        (22, 1) => &[8, 8, 8, 8, 4, 4, 4, 4, 4],
+        (22, _) => &[4, 8, 8, 8, 8, 4, 4, 4, 4],
+        (23, 1) => &[8, 8, 8, 8, 8, 4, 4, 4, 4],
+        (23, _) => &[4, 4, 8, 8, 8, 4, 4, 4, 4, 4],
+        (24, 1) => &[8, 8, 8, 8, 4, 4, 4, 4, 4, 4],
+        (24, _) => &[4, 4, 8, 8, 8, 8, 4, 4, 4, 4],
+        (25, _) => &[4, 4, 8, 8, 8, 4, 4, 4, 4, 4, 4],
+        (26, 1) => &[8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 4],
+        (26, _) => &[4, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4],
         _ => &[],
     };
-    if !measured.is_empty() {
-        return measured.to_vec();
+    if measured.is_empty() {
+        large_radixes(bits)
+    } else {
+        measured.to_vec()
     }
-    let mut radixes = vec![8; bits / 3];
-    match bits % 3 {
-        1 => radixes.insert(0, 2),
-        2 => radixes.insert(0, 4),
-        _ => {}
-    }
-    radixes
 }
 
 /// Radixes for NEON without FCMA, the first pass first, for vectors of `lanes` complex numbers.
-/// Sizes up to 2^20 use the fastest plan measured on Apple M4.
+/// Sizes up to 2^26 use the fastest plan measured on Apple M4.
 #[cfg_attr(not(all(target_arch = "aarch64", feature = "neon")), allow(dead_code))]
 pub fn neon_radixes(len: usize, lanes: usize) -> Vec<usize> {
     let bits = len.trailing_zeros() as usize;
@@ -381,30 +394,42 @@ pub fn neon_radixes(len: usize, lanes: usize) -> Vec<usize> {
         (15, _) => &[8, 8, 8, 8, 8],
         (16, 1) => &[4, 8, 8, 8, 8, 4],
         (16, _) => &[8, 8, 8, 8, 4, 4],
-        (17, 1) => &[8, 4, 8, 8, 8, 8],
-        (17, _) => &[4, 8, 8, 8, 8, 8],
-        (18, 1) => &[8, 4, 8, 8, 8, 2, 8],
-        (18, _) => &[4, 2, 8, 8, 8, 8, 8],
-        (19, 1) => &[8, 4, 8, 8, 8, 4, 8],
-        (19, _) => &[8, 8, 8, 8, 8, 4, 4],
-        (20, 1) => &[8, 4, 8, 8, 8, 8, 8],
-        (20, _) => &[8, 8, 8, 8, 8, 4, 8],
+        (17, _) => &[4, 4, 4, 8, 8, 4, 8],
+        (18, 1) => &[4, 4, 4, 4, 8, 4, 4, 8],
+        (18, _) => &[4, 8, 8, 4, 8, 4, 8],
+        (19, 1) => &[4, 4, 8, 4, 8, 4, 4, 8],
+        (19, _) => &[4, 4, 4, 8, 8, 4, 4, 8],
+        (20, _) => &[4, 4, 4, 8, 8, 4, 4, 4, 4],
+        (21, 1) => &[4, 4, 4, 8, 8, 8, 4, 4, 4],
+        (21, _) => &[4, 4, 4, 4, 8, 4, 4, 4, 4, 4],
+        (22, 1) => &[4, 4, 4, 4, 8, 8, 4, 4, 4, 4],
+        (22, _) => &[4, 4, 4, 4, 4, 8, 8, 8, 8],
+        (23, 1) => &[4, 4, 4, 8, 8, 8, 4, 4, 4, 4],
+        (23, _) => &[4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4],
+        (24, 1) => &[4, 4, 4, 4, 8, 8, 4, 4, 4, 4, 4],
+        (24, _) => &[4, 4, 8, 8, 8, 8, 4, 4, 4, 4],
+        (25, 1) => &[4, 4, 8, 8, 8, 4, 4, 4, 4, 4, 4],
+        (25, _) => &[4, 4, 4, 4, 4, 8, 8, 8, 8, 8],
+        (26, 1) => &[4, 4, 8, 8, 8, 8, 4, 4, 4, 4, 4],
+        (26, _) => &[8, 4, 8, 8, 8, 8, 8, 8, 8],
         _ => &[],
     };
-    if !measured.is_empty() {
-        return measured.to_vec();
+    if measured.is_empty() {
+        large_radixes(bits)
+    } else {
+        measured.to_vec()
     }
-    // Larger sizes: radix 8, with a radix 4 second and, if needed, another second to last.
-    let mut radixes = vec![8; bits / 3];
-    match bits % 3 {
-        1 => {
-            radixes[1] = 4;
-            let last = radixes.len() - 1;
-            radixes.insert(last, 4);
-        }
-        2 => radixes.insert(1, 4),
-        _ => {}
-    }
+}
+
+/// Radixes for sizes above the measured ones: two radix 4 passes, then radix 8 ones, then at
+/// least four radix 4 ones. On Apple M4 that's 1.05x to 1.44x faster than Radix4 at 2^27 and
+/// 2^28, for NEON and FCMA.
+#[cfg_attr(not(target_arch = "aarch64"), allow(dead_code))]
+fn large_radixes(bits: usize) -> Vec<usize> {
+    let fours = (4..).find(|fours| (bits - 4 - 2 * fours).is_multiple_of(3)).unwrap();
+    let mut radixes = vec![4, 4];
+    radixes.extend(std::iter::repeat_n(8, (bits - 4 - 2 * fours) / 3));
+    radixes.extend(std::iter::repeat_n(4, fours));
     radixes
 }
 
@@ -532,8 +557,14 @@ mod unit_tests {
                 let neon = neon_radixes(1 << bits, lanes);
                 assert_eq!(neon.iter().product::<usize>(), 1 << bits, "{neon:?}");
             }
+
             let unfused = unfused_radixes(1 << bits);
             assert_eq!(unfused.iter().product::<usize>(), 1 << bits, "{unfused:?}");
+        }
+        for bits in 27..=40 {
+            let large = large_radixes(bits);
+            let large_bits: u32 = large.iter().map(|radix| radix.trailing_zeros()).sum();
+            assert_eq!(large_bits as usize, bits, "{large:?}");
         }
     }
 }
