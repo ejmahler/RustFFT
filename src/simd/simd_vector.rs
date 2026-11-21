@@ -8,10 +8,12 @@
 use std::unimplemented;
 
 use num_complex::Complex;
+use num_traits::{One, Zero};
 
 use crate::FftDirection;
 use crate::common::FftNum;
 use crate::simd::parallel_fft::ParallelFft;
+use crate::simd::simd_array::SimdComplexArray;
 
 /// The two ways of writing the pairwise multiply loops in `simd_mul_slice.rs`. Which one is faster
 /// depends on the backend and the precision, and doesn't follow from anything else the vector
@@ -53,6 +55,12 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     type Butterfly5: ParallelFft<Self, 5>;
     type Butterfly6: ParallelFft<Self, 6>;
     type Butterfly7: ParallelFft<Self, 7>;
+    type Butterfly8: ParallelFft<Self, 8>;
+    type Butterfly16: ParallelFft<Self, 16>;
+
+    /// A precomputed twiddle factor, in whichever form this backend multiplies by fastest: the
+    /// plain vector when it has complex multiply instructions, a [`SplitTwiddle`] otherwise.
+    type Twiddle: Copy + Send + Sync;
 
     unsafe fn zero_vector() -> Self;
 
@@ -88,6 +96,9 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 
     // math ops
     unsafe fn neg(a: Self) -> Self;
+    /// Swaps the real and imaginary part of every complex number.
+    unsafe fn swap_complex(a: Self) -> Self;
+
     unsafe fn add(a: Self, b: Self) -> Self;
     unsafe fn sub(a: Self, b: Self) -> Self;
     unsafe fn mul(a: Self, b: Self) -> Self;
@@ -108,6 +119,15 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     /// `mul_complex`, or one more.
     unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self;
 
+    /// The twiddle factor with `twiddles[i]` in lane `i`, given `COMPLEX_PER_VECTOR` of them.
+    unsafe fn make_twiddle(twiddles: &[Complex<Self::ScalarType>]) -> Self::Twiddle;
+
+    /// The twiddle factor with `twiddle` in every lane. Cheap enough to call in a loop.
+    unsafe fn broadcast_twiddle(twiddle: Complex<Self::ScalarType>) -> Self::Twiddle;
+
+    /// Multiply the complex numbers in `value` by the ones in `twiddle`, lane by lane.
+    unsafe fn mul_twiddle(value: Self, twiddle: Self::Twiddle) -> Self;
+
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X
     /// `COMPLEX_PER_VECTOR` times.
     unsafe fn make_mixedradix_twiddle_chunk(
@@ -123,4 +143,57 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5;
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6;
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7;
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8;
+    unsafe fn make_butterfly16(direction: FftDirection) -> Self::Butterfly16;
+}
+
+/// A twiddle factor as its real parts `(re, re)` and its imaginary parts `(-im, im)`.
+///
+/// Multiplying by it is a multiply, a swap and a fused multiply-add, with no shuffles of the
+/// twiddle, so it's the fastest form for backends without complex multiply instructions.
+#[derive(Clone, Copy)]
+pub struct SplitTwiddle<V> {
+    re: V,
+    im: V,
+}
+
+impl<V: SimdVector> SplitTwiddle<V> {
+    /// See [`SimdVector::make_twiddle`].
+    #[inline(always)]
+    pub unsafe fn new(twiddles: &[Complex<V::ScalarType>]) -> Self {
+        debug_assert_eq!(twiddles.len(), V::COMPLEX_PER_VECTOR);
+        // Room for the widest vector, two complex numbers. Narrower ones load only the first.
+        let mut re = [Complex::zero(); 2];
+        let mut im = [Complex::zero(); 2];
+        for (i, twiddle) in twiddles.iter().enumerate() {
+            re[i] = Complex::new(twiddle.re, twiddle.re);
+            im[i] = Complex::new(-twiddle.im, twiddle.im);
+        }
+        unsafe {
+            Self {
+                re: re.as_slice().load(0),
+                im: im.as_slice().load(0),
+            }
+        }
+    }
+
+    /// See [`SimdVector::broadcast_twiddle`].
+    #[inline(always)]
+    pub unsafe fn broadcast(twiddle: Complex<V::ScalarType>) -> Self {
+        let one = V::ScalarType::one();
+        let signs = [Complex::new(-one, one); 2];
+        unsafe {
+            let im = V::broadcast_scalar(twiddle.im);
+            Self {
+                re: V::broadcast_scalar(twiddle.re),
+                im: V::mul(im, signs.as_slice().load(0)),
+            }
+        }
+    }
+
+    /// See [`SimdVector::mul_twiddle`].
+    #[inline(always)]
+    pub unsafe fn mul(self, value: V) -> V {
+        unsafe { V::fmadd(V::mul(value, self.re), V::swap_complex(value), self.im) }
+    }
 }

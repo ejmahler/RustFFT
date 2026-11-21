@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use crate::{FftDirection, twiddles};
 
 use crate::simd::simd_array::SimdComplexArray;
-use crate::simd::simd_vector::{MulSliceAlgorithm, SimdVector};
+use crate::simd::simd_vector::{MulSliceAlgorithm, SimdVector, SplitTwiddle};
 use crate::wasm_simd::wasm_simd_butterflies::*;
 use crate::wasm_simd::wasm_simd_prime_butterflies::*;
 use crate::wasm_simd::wasm_simd_utils::transpose_complex_2x2_f32;
@@ -150,6 +150,9 @@ impl SimdVector for WasmVector64 {
     type Butterfly5 = WasmSimdF64ParallelButterfly5;
     type Butterfly6 = WasmSimdF64ParallelButterfly6;
     type Butterfly7 = WasmSimdF64ParallelButterfly7;
+    type Butterfly8 = WasmSimdF64ParallelButterfly8;
+    type Butterfly16 = WasmSimdF64ParallelButterfly16;
+    type Twiddle = SplitTwiddle<Self>;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -167,8 +170,9 @@ impl SimdVector for WasmVector64 {
     }
 
     #[inline(always)]
-    unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Unused: a dup load of one complex f64 is just load_complex");
+    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        // A vector of one complex number, so duplicating it is the plain load
+        unsafe { Self::load_complex(ptr) }
     }
 
     #[inline(always)]
@@ -191,6 +195,10 @@ impl SimdVector for WasmVector64 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         Self(f64x2_neg(a.0))
+    }
+    #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        Self(i64x2_shuffle::<1, 0>(a.0, a.0))
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
@@ -259,6 +267,18 @@ impl SimdVector for WasmVector64 {
             f64x2_mul(swapped, u64x2_shuffle::<1, 1>(right.0, right.0)),
         ))
     }
+    #[inline(always)]
+    unsafe fn make_twiddle(twiddles: &[Complex<Self::ScalarType>]) -> Self::Twiddle {
+        unsafe { SplitTwiddle::new(twiddles) }
+    }
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(twiddle: Complex<Self::ScalarType>) -> Self::Twiddle {
+        unsafe { SplitTwiddle::broadcast(twiddle) }
+    }
+    #[inline(always)]
+    unsafe fn mul_twiddle(value: Self, twiddle: Self::Twiddle) -> Self {
+        unsafe { twiddle.mul(value) }
+    }
 
     #[inline(always)]
     unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
@@ -284,6 +304,14 @@ impl SimdVector for WasmVector64 {
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         unsafe { Self::Butterfly7::new(direction) }
     }
+    #[inline(always)]
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        Self::Butterfly8::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly16(direction: FftDirection) -> Self::Butterfly16 {
+        Self::Butterfly16::new(direction)
+    }
 }
 
 impl SimdVector for WasmVector32 {
@@ -301,6 +329,9 @@ impl SimdVector for WasmVector32 {
     type Butterfly5 = WasmSimdF32ParallelButterfly5;
     type Butterfly6 = WasmSimdF32ParallelButterfly6;
     type Butterfly7 = WasmSimdF32ParallelButterfly7;
+    type Butterfly8 = WasmSimdF32ParallelButterfly8;
+    type Butterfly16 = WasmSimdF32ParallelButterfly16;
+    type Twiddle = SplitTwiddle<Self>;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -351,6 +382,10 @@ impl SimdVector for WasmVector32 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         Self(f32x4_neg(a.0))
+    }
+    #[inline(always)]
+    unsafe fn swap_complex(a: Self) -> Self {
+        Self(i32x4_shuffle::<1, 0, 3, 2>(a.0, a.0))
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
@@ -418,6 +453,18 @@ impl SimdVector for WasmVector32 {
         let sum = f32x4_mul(dup_re, right.0);
         WasmVector32(f32x4_add(sum, f32x4_mul(dup_im, swapped)))
     }
+    #[inline(always)]
+    unsafe fn make_twiddle(twiddles: &[Complex<Self::ScalarType>]) -> Self::Twiddle {
+        unsafe { SplitTwiddle::new(twiddles) }
+    }
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(twiddle: Complex<Self::ScalarType>) -> Self::Twiddle {
+        unsafe { SplitTwiddle::broadcast(twiddle) }
+    }
+    #[inline(always)]
+    unsafe fn mul_twiddle(value: Self, twiddle: Self::Twiddle) -> Self {
+        unsafe { twiddle.mul(value) }
+    }
 
     #[inline(always)]
     unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
@@ -442,6 +489,14 @@ impl SimdVector for WasmVector32 {
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         unsafe { Self::Butterfly7::new(direction) }
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly8(direction: FftDirection) -> Self::Butterfly8 {
+        Self::Butterfly8::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly16(direction: FftDirection) -> Self::Butterfly16 {
+        Self::Butterfly16::new(direction)
     }
 }
 

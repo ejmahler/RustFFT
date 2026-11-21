@@ -443,6 +443,117 @@ impl<T: FftNum> ParallelFft<Complex<T>, 7> for ScalarParallelButterfly7<T> {
     }
 }
 
+pub struct ScalarParallelButterfly8<T> {
+    bf2: ScalarParallelButterfly2<T>,
+    bf4: ScalarParallelButterfly4<T>,
+    twiddle1: Complex<T>,
+    twiddle3: Complex<T>,
+    direction: FftDirection,
+}
+impl<T: FftNum> ScalarParallelButterfly8<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            bf2: ScalarParallelButterfly2::new(direction),
+            bf4: ScalarParallelButterfly4::new(direction),
+            twiddle1: twiddles::compute_twiddle(1, 8, direction),
+            twiddle3: twiddles::compute_twiddle(3, 8, direction),
+            direction,
+        }
+    }
+}
+impl<T: FftNum> ParallelFft<Complex<T>, 8> for ScalarParallelButterfly8<T> {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [Complex<T>; 8]) -> [Complex<T>; 8] {
+        // Algorithm: 4x2 mixed radix
+
+        // step 2: column FFTs
+        let col0 = self.bf4.parallel_fft([data[0], data[2], data[4], data[6]]);
+        let mut col1 = self.bf4.parallel_fft([data[1], data[3], data[5], data[7]]);
+
+        // step 3: apply twiddle factors
+        col1[1] = col1[1] * self.twiddle1;
+        col1[2] = twiddles::rotate_90(col1[2], self.direction);
+        col1[3] = col1[3] * self.twiddle3;
+
+        // step 4: transpose, (merged into the next step)
+
+        // step 5: row FFTs
+        let row0 = self.bf2.parallel_fft([col0[0], col1[0]]);
+        let row1 = self.bf2.parallel_fft([col0[1], col1[1]]);
+        let row2 = self.bf2.parallel_fft([col0[2], col1[2]]);
+        let row3 = self.bf2.parallel_fft([col0[3], col1[3]]);
+        [
+            row0[0], row1[0], row2[0], row3[0], row0[1], row1[1], row2[1], row3[1],
+        ]
+    }
+}
+
+pub struct ScalarParallelButterfly16<T> {
+    bf4: ScalarParallelButterfly4<T>,
+    twiddle1: Complex<T>,
+    twiddle2: Complex<T>,
+    twiddle3: Complex<T>,
+    twiddle6: Complex<T>,
+    twiddle9: Complex<T>,
+    direction: FftDirection,
+}
+impl<T: FftNum> ScalarParallelButterfly16<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            bf4: ScalarParallelButterfly4::new(direction),
+            twiddle1: twiddles::compute_twiddle(1, 16, direction),
+            twiddle2: twiddles::compute_twiddle(2, 16, direction),
+            twiddle3: twiddles::compute_twiddle(3, 16, direction),
+            twiddle6: twiddles::compute_twiddle(6, 16, direction),
+            twiddle9: twiddles::compute_twiddle(9, 16, direction),
+            direction,
+        }
+    }
+}
+impl<T: FftNum> ParallelFft<Complex<T>, 16> for ScalarParallelButterfly16<T> {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [Complex<T>; 16]) -> [Complex<T>; 16] {
+        // Algorithm: 4x4 mixed radix
+
+        // step 2: column FFTs
+        let col0 = self.bf4.parallel_fft([data[0], data[4], data[8], data[12]]);
+        let mut col1 = self.bf4.parallel_fft([data[1], data[5], data[9], data[13]]);
+        let mut col2 = self
+            .bf4
+            .parallel_fft([data[2], data[6], data[10], data[14]]);
+        let mut col3 = self
+            .bf4
+            .parallel_fft([data[3], data[7], data[11], data[15]]);
+
+        // step 3: apply twiddle factors
+        col1[1] = col1[1] * self.twiddle1;
+        col1[2] = col1[2] * self.twiddle2;
+        col1[3] = col1[3] * self.twiddle3;
+
+        col2[1] = col2[1] * self.twiddle2;
+        col2[2] = twiddles::rotate_90(col2[2], self.direction);
+        col2[3] = col2[3] * self.twiddle6;
+
+        col3[1] = col3[1] * self.twiddle3;
+        col3[2] = col3[2] * self.twiddle6;
+        col3[3] = col3[3] * self.twiddle9;
+
+        // step 4: transpose, (merged into the next step)
+
+        // step 5: row FFTs
+        let row0 = self.bf4.parallel_fft([col0[0], col1[0], col2[0], col3[0]]);
+        let row1 = self.bf4.parallel_fft([col0[1], col1[1], col2[1], col3[1]]);
+        let row2 = self.bf4.parallel_fft([col0[2], col1[2], col2[2], col3[2]]);
+        let row3 = self.bf4.parallel_fft([col0[3], col1[3], col2[3], col3[3]]);
+        [
+            row0[0], row1[0], row2[0], row3[0], row0[1], row1[1], row2[1], row3[1], row0[2],
+            row1[2], row2[2], row3[2], row0[3], row1[3], row2[3], row3[3],
+        ]
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -472,4 +583,10 @@ mod unit_tests {
     test_butterfly_func!(test_scalar_parallel_butterfly5, ScalarParallelButterfly5, 5);
     test_butterfly_func!(test_scalar_parallel_butterfly6, ScalarParallelButterfly6, 6);
     test_butterfly_func!(test_scalar_parallel_butterfly7, ScalarParallelButterfly7, 7);
+    test_butterfly_func!(test_scalar_parallel_butterfly8, ScalarParallelButterfly8, 8);
+    test_butterfly_func!(
+        test_scalar_parallel_butterfly16,
+        ScalarParallelButterfly16,
+        16
+    );
 }
