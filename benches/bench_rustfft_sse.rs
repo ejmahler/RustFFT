@@ -1,10 +1,10 @@
-use rustfft::num_complex::Complex;
+use rustfft::{FftNum, num_complex::Complex};
 use rustfft::num_traits::Zero;
 use rustfft::Fft;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -186,8 +186,28 @@ fn sse_planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100
 fn sse_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
 fn sse_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
 
+fn sse_compare_stockham(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("compare_stockham_f32");
 
+        for p2 in [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("radix4_chunk", len), |b| {
+                bench_planned_f32(b, len);
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("compare_stockham_f64");
 
+        for p2 in [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+            let len = 2usize.pow(p2);
+            group.bench_function(BenchmarkId::new("radix4_chunk", len), |b| {
+                bench_planned_f64(b, len);
+            });
+        }
+    }
+}
 
 fn criterion_benchmark(c: &mut Criterion) {
     config::register_benchmarks!(
@@ -310,6 +330,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, sse_compare_stockham
 }
 criterion_main!(benches);
