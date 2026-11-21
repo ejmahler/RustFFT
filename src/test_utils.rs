@@ -6,15 +6,17 @@ use num_traits::{Float, One, Zero};
 use rand::distr::{Distribution, Uniform, uniform::SampleUniform};
 use rand::{SeedableRng, rngs::StdRng};
 
+use crate::algorithm::BluesteinsAlgorithm;
 use crate::algorithm::butterflies::{
     Butterfly1, Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6, Butterfly7, Butterfly8,
-    Butterfly9, Butterfly12, Butterfly16,
+    Butterfly9, Butterfly12, Butterfly16, Butterfly32,
 };
+use crate::array_utils::{compute_logarithm, reverse_bits};
 use crate::simd::parallel_fft::ParallelFft;
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
 use crate::{Direction, FftNum, Length, algorithm::Dft};
-use crate::{Fft, FftDirection, array_utils};
+use crate::{Fft, FftDirection, array_utils, twiddles};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -90,16 +92,25 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
     let n = 3;
 
-    //test the forward direction
-    let dft = Dft::new(len, direction);
+    // Set up a reference Fft instance to compare against. For small sizes use Dft, and for large sizes, use bluestein's algorithm with a test-only cooley tukey implementation
+    // The vast majority of algorithms can achieve full coverage with very small lengths, so the latter is only necessary in a few cases
+    let reference_fft = if len < 128 {
+        Arc::new(Dft::new(len, direction)) as Arc<dyn Fft<T>>
+    } else if len.is_power_of_two() {
+        Arc::new(CooleyTukey::new(len, direction))
+    } else {
+        let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
+        let inner_fft = Arc::new(CooleyTukey::new(inner_fft_len, direction));
+        Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
+    };
 
     let dirty_scratch_value = Complex::one() * T::from_i32(100).unwrap();
 
     // set up buffers
     let reference_input = random_signal(len * n);
     let mut expected_output = reference_input.clone();
-    let mut dft_scratch = vec![Zero::zero(); dft.get_inplace_scratch_len()];
-    dft.process_with_scratch(&mut expected_output, &mut dft_scratch);
+    let mut dft_scratch = vec![Zero::zero(); reference_fft.get_inplace_scratch_len()];
+    reference_fft.process_with_scratch(&mut expected_output, &mut dft_scratch);
 
     // test process()
     {
@@ -362,6 +373,126 @@ pub fn construct_base<T: FftNum>(n: usize, direction: FftDirection) -> Arc<dyn F
         9 => Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>,
         12 => Arc::new(Butterfly12::new(direction)) as Arc<dyn Fft<T>>,
         16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
+        32 => Arc::new(Butterfly32::new(direction)) as Arc<dyn Fft<T>>,
         _ => unimplemented!(),
+    }
+}
+
+// Simple cooley tukey impl, which we can plug into bluestein's to get a known-good O(nlogn) FFT algorithm for large fft sizes
+struct CooleyTukey<T: FftNum> {
+    len: usize,
+    direction: FftDirection,
+    twiddles: Box<[Complex<T>]>,
+}
+impl<T: FftNum> CooleyTukey<T> {
+    pub fn new(len: usize, direction: FftDirection) -> Self {
+        assert!(len.is_power_of_two());
+        let twiddles = (0..len / 2)
+            .map(|i| twiddles::compute_twiddle(i, len, direction))
+            .collect();
+        Self {
+            len,
+            direction,
+            twiddles,
+        }
+    }
+    fn reverse_bits(&self, src: &[Complex<T>], dst: &mut [Complex<T>]) {
+        let rev_digits = compute_logarithm::<2>(self.len).unwrap();
+        for (i, e) in src.iter().enumerate() {
+            let rev_index = reverse_bits::<2>(i, rev_digits);
+            dst[rev_index] = *e;
+        }
+    }
+    fn process_single(&self, buffer: &mut [Complex<T>]) {
+        let mut cross_fft_len = 2;
+        let mut twiddle_stride = self.len / 2;
+        while cross_fft_len <= self.len {
+            for base in (0..self.len).step_by(cross_fft_len) {
+                let mut twiddle_index = 0;
+                for j in 0..cross_fft_len / 2 {
+                    let a = buffer[base + j];
+                    let b = buffer[base + j + cross_fft_len / 2] * self.twiddles[twiddle_index];
+
+                    buffer[base + j] = a + b;
+                    buffer[base + j + cross_fft_len / 2] = a - b;
+
+                    twiddle_index += twiddle_stride;
+                }
+            }
+            cross_fft_len *= 2;
+            twiddle_stride /= 2;
+        }
+    }
+}
+impl<T: FftNum> Fft<T> for CooleyTukey<T> {
+    fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let scratch = &mut scratch[..self.len];
+        for chunk in buffer.chunks_exact_mut(self.len) {
+            self.reverse_bits(chunk, scratch);
+            chunk.copy_from_slice(scratch);
+            self.process_single(chunk);
+        }
+    }
+
+    fn process_outofplace_with_scratch(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        for (chunk_in, chunk_out) in input
+            .chunks(self.len)
+            .zip(output.chunks_exact_mut(self.len))
+        {
+            self.reverse_bits(chunk_in, chunk_out);
+            self.process_single(chunk_out);
+        }
+    }
+
+    fn process_immutable_with_scratch(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        for (chunk_in, chunk_out) in input
+            .chunks(self.len)
+            .zip(output.chunks_exact_mut(self.len))
+        {
+            self.reverse_bits(chunk_in, chunk_out);
+            self.process_single(chunk_out);
+        }
+    }
+
+    fn get_inplace_scratch_len(&self) -> usize {
+        self.len
+    }
+
+    fn get_outofplace_scratch_len(&self) -> usize {
+        0
+    }
+
+    fn get_immutable_scratch_len(&self) -> usize {
+        0
+    }
+}
+impl<T: FftNum> Direction for CooleyTukey<T> {
+    fn fft_direction(&self) -> FftDirection {
+        self.direction
+    }
+}
+impl<T: FftNum> Length for CooleyTukey<T> {
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+
+#[test]
+fn test_cooley_tukey() {
+    for direction in [FftDirection::Forward, FftDirection::Inverse] {
+        for len in [1, 2, 4, 8, 16, 32, 64] {
+            let fft = CooleyTukey::new(len, direction);
+            check_fft_algorithm::<f32>(&fft, len, direction);
+        }
     }
 }

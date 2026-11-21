@@ -543,3 +543,16 @@ pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> u
     }
     result
 }
+
+/// Selects a scratch buffer to use
+///
+/// In many, many places in RustFFT, we have logic that essentially says
+/// "If we were explicity provided scratch, use it, otherwise just use an existing buffer we have laying around"
+/// This function makes that logic a one-liner
+pub fn choose_scratch<'a, T>(buffer: &'a mut [T], explicit_scratch: &'a mut [T]) -> &'a mut [T] {
+    if explicit_scratch.is_empty() {
+        buffer
+    } else {
+        explicit_scratch
+    }
+}

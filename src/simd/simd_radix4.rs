@@ -15,11 +15,14 @@
 //! half stored back.
 
 use std::any::TypeId;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{reverse_bits, workaround_transmute, workaround_transmute_mut};
+use crate::array_utils::{
+    choose_scratch, reverse_bits, workaround_transmute, workaround_transmute_mut,
+};
 use crate::common::{FftNum, RadixFactor};
 use crate::simd::simd_radixn::cross_layer_chunks;
 use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
@@ -27,6 +30,7 @@ use crate::simd::simd_vector::SimdVector;
 use crate::{Fft, FftDirection};
 
 const RADIX: usize = 4;
+const TARGET_CHUNK_SIZE: usize = 65536;
 
 /// FFT algorithm for lengths that factor into base * 4**k
 /// This is generic over SIMD instruction set and is designed to be embedded into a
@@ -38,6 +42,7 @@ pub struct SimdRadix4<V: SimdVector, T> {
     base_len: usize,
 
     transpose_algorithm: TransposeAlgorithm,
+    chunk_data: Option<(NonZeroU32, u32)>,
     butterfly4: V::Butterfly4,
 
     len: usize,
@@ -123,6 +128,26 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             0
         };
 
+        // For large FFTs, we want to execute the first few layers in chunks to improve their cache coherence.
+        let chunk_data: Option<(NonZeroU32, u32)> = if len > TARGET_CHUNK_SIZE {
+            let mut cross_fft_len = base_len;
+            let mut twiddle_start = 0;
+            for _ in 0..k {
+                let new_len = cross_fft_len * RADIX;
+                if new_len > TARGET_CHUNK_SIZE {
+                    break;
+                }
+                twiddle_start += cross_fft_len.div_ceil(complex_per_vector) * (RADIX - 1);
+                cross_fft_len = new_len;
+            }
+            Some((
+                (cross_fft_len as u32).try_into().unwrap(),
+                twiddle_start as u32,
+            ))
+        } else {
+            None
+        };
+
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
 
@@ -130,6 +155,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             base_len,
 
             transpose_algorithm,
+            chunk_data,
             butterfly4: unsafe { V::make_butterfly4(direction) },
 
             len,
@@ -160,27 +186,30 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         }
     }
 
-    /// The stack of in-place cross-FFT layers, run after the base FFTs.
     #[inline(always)]
-    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
-        unsafe {
-            let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
+    unsafe fn cross_ffts(
+        &self,
+        output: &mut [Complex<T>],
+        mut cross_fft_len: usize,
+        twiddle_start: usize,
+    ) {
+        let output: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(output) };
 
-            let mut cross_fft_len = self.base_len;
-            let mut layer_twiddles: &[V] = &self.twiddles;
+        let mut layer_twiddles: &[V] = &self.twiddles[twiddle_start..];
 
-            while cross_fft_len < out.len() {
-                let num_columns = cross_fft_len;
-                cross_fft_len *= RADIX;
+        while cross_fft_len < output.len() {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= RADIX;
 
-                // Dispatch once per layer rather than once per chunk, so each layer runs a single
-                // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
-                cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, &self.butterfly4);
+            // Dispatch once per layer rather than once per chunk, so each layer runs a single
+            // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
+            unsafe {
+                cross_layer_chunks::<V, 4>(output, layer_twiddles, num_columns, &self.butterfly4)
+            };
 
-                // skip past all the twiddle factors used in this layer
-                let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
-                layer_twiddles = &layer_twiddles[twiddle_offset..];
-            }
+            // skip past all the twiddle factors used in this layer
+            let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
+            layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
     }
 
@@ -192,8 +221,29 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         scratch: &mut [Complex<T>],
     ) {
         self.transpose(input, output);
-        self.base_fft.process_with_scratch(output, scratch);
-        unsafe { self.cross_ffts(output) };
+
+        // Process the early layers in chunks: Rather than doing one entire layer at a time for the whole FFT,
+        // we take cache-sized chunks of data and run them through every layer possible before moving on to the next chunk
+        let (cross_fft_len, twiddle_start) =
+            if let Some((chunk_size, late_twiddle_start)) = self.chunk_data {
+                let chunk_size: u32 = chunk_size.into();
+                let chunk_size: usize = chunk_size as usize;
+
+                for chunk in output.chunks_mut(chunk_size) {
+                    self.base_fft.process_with_scratch(chunk, scratch);
+                    unsafe { self.cross_ffts(chunk, self.base_len, 0) };
+                }
+
+                (chunk_size, late_twiddle_start as usize)
+            } else {
+                // This FFT is small enough that it's not worth it to break the early layers into small chunks, so just process the entire base
+                self.base_fft.process_with_scratch(output, scratch);
+
+                (self.base_len, 0)
+            };
+
+        // Process the late layers as one block
+        unsafe { self.cross_ffts(output, cross_fft_len, twiddle_start) };
     }
 
     #[inline(always)]
@@ -204,23 +254,69 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         scratch: &mut [Complex<T>],
     ) {
         self.transpose(input, output);
-        // the input is free once the transpose is done, so use it as base scratch
-        // when we weren't handed any of our own
-        let base_scratch = if !scratch.is_empty() { scratch } else { input };
-        self.base_fft.process_with_scratch(output, base_scratch);
-        unsafe { self.cross_ffts(output) };
+        let scratch = choose_scratch(input, scratch);
+
+        // Process the small layers in chunks
+        let (cross_fft_len, twiddle_start) =
+            if let Some((chunk_size, late_twiddle_start)) = self.chunk_data {
+                let chunk_size: u32 = chunk_size.into();
+                let chunk_size: usize = chunk_size as usize;
+
+                for chunk in output.chunks_mut(chunk_size) {
+                    self.base_fft.process_with_scratch(chunk, scratch);
+                    unsafe { self.cross_ffts(chunk, self.base_len, 0) };
+                }
+
+                (chunk_size, late_twiddle_start as usize)
+            } else {
+                // This FFT is small enough that we aren't breaking the small layers into small chunks, so just process the entire base
+                self.base_fft.process_with_scratch(output, scratch);
+
+                (self.base_len, 0)
+            };
+
+        // Process the large layers as one block
+        unsafe { self.cross_ffts(output, cross_fft_len, twiddle_start) };
     }
 
     #[inline(always)]
     pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
         self.transpose(buffer, transposed);
+
         // Run the base out of place, from the scratch back into the caller's chunk.
         // The cross layers are then in place on the chunk, and the whole thing ends
         // where the caller wants it without a final copy.
-        self.base_fft
-            .process_outofplace_with_scratch(transposed, buffer, inner_scratch);
-        unsafe { self.cross_ffts(buffer) };
+
+        // Process the small layers in chunks
+        let (cross_fft_len, twiddle_start) =
+            if let Some((chunk_size, late_twiddle_start)) = self.chunk_data {
+                let chunk_size: u32 = chunk_size.into();
+                let chunk_size: usize = chunk_size as usize;
+
+                for (transposed_chunk, buffer_chunk) in transposed
+                    .chunks_mut(chunk_size)
+                    .zip(buffer.chunks_mut(chunk_size))
+                {
+                    self.base_fft.process_outofplace_with_scratch(
+                        transposed_chunk,
+                        buffer_chunk,
+                        inner_scratch,
+                    );
+                    unsafe { self.cross_ffts(buffer_chunk, self.base_len, 0) };
+                }
+
+                (chunk_size, late_twiddle_start as usize)
+            } else {
+                // This FFT is small enough that we aren't breaking the small layers into small chunks, so just process the entire base
+                self.base_fft
+                    .process_outofplace_with_scratch(transposed, buffer, inner_scratch);
+
+                (self.base_len, 0)
+            };
+
+        // Process the large layers as one block
+        unsafe { self.cross_ffts(buffer, cross_fft_len, twiddle_start) };
     }
     #[inline(always)]
     pub fn get_inplace_scratch_len(&self) -> usize {
@@ -320,5 +416,37 @@ pub mod test_bodies {
         let fft = new_fn(k, base_fft);
 
         check_fft_algorithm::<V::ScalarType>(fft.as_ref(), len, direction);
+    }
+
+    pub fn test_chunk_crossover<V>(new_fn: &NewFn<V>)
+    where
+        V: SimdVector,
+        V::ScalarType: Float + SampleUniform,
+    {
+        // We want to make sure that when we cross over from computing entire FFTs to computing with chunks,
+        // we properly handle the handoff from the chunked section to the full-pass section
+        for len in [
+            TARGET_CHUNK_SIZE / 4,
+            TARGET_CHUNK_SIZE / 2,
+            TARGET_CHUNK_SIZE,
+            TARGET_CHUNK_SIZE * 2,
+            TARGET_CHUNK_SIZE * 4,
+            TARGET_CHUNK_SIZE * 8,
+            TARGET_CHUNK_SIZE * 16,
+        ] {
+            for direction in [FftDirection::Forward, FftDirection::Inverse] {
+                let base_len = if len.trailing_zeros() % 2 == 0 {
+                    16
+                } else {
+                    32
+                };
+                let cross_len = len / base_len;
+                let k = cross_len.trailing_zeros() / 2;
+                let base = construct_base(base_len, direction);
+                let fft = new_fn(k, base);
+
+                check_fft_algorithm::<V::ScalarType>(fft.as_ref(), len, direction);
+            }
+        }
     }
 }

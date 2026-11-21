@@ -33,20 +33,27 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_sse_radix4_replacement_f64() {
+    fn test_sse_radix4_f64() {
         // f64 fits one complex per vector, so every base length is legal
         test_bodies::factor_pairs::<__m128d>(&[1, 2, 3, 4, 5, 6], &new_fn::<__m128d>);
     }
 
     #[test]
-    fn test_sse_radix4_replacement_f32() {
+    fn test_sse_radix4_f32() {
         // f32 fits two complex per vector, so an odd base length means every layer ends with a
         // partial column
         test_bodies::factor_pairs::<__m128>(&[1, 2, 3, 4, 5, 6], &new_fn::<__m128>);
     }
 
     #[test]
-    fn test_sse_radix4_replacement_composite_base() {
+    fn test_sse_radix4_composite_base() {
         test_bodies::composite_base::<__m128, __m128d>(&new_fn::<__m128>, &new_fn::<__m128d>);
+    }
+
+    #[ignore]
+    #[test]
+    fn test_sse_radix4_chunk_crossover() {
+        test_bodies::test_chunk_crossover::<__m128>(&new_fn::<__m128>);
+        test_bodies::test_chunk_crossover::<__m128d>(&new_fn::<__m128d>);
     }
 }
