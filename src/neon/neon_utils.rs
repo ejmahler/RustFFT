@@ -20,29 +20,32 @@ impl Rotate90F32 {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             sign: if direction == FftDirection::Inverse {
-                unsafe { vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()) }
+                unsafe { vld1q_f32([-1.0, 1.0, -1.0, 1.0].as_ptr()) }
             } else {
-                unsafe { vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()) }
+                unsafe { vld1q_f32([1.0, -1.0, 1.0, -1.0].as_ptr()) }
             },
         }
     }
 
     #[inline(always)]
+    pub unsafe fn rotate_and_add(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        unsafe { vfmaq_f32(acc, vrev64q_f32(values), self.sign) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_and_sub(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        unsafe { vfmsq_f32(acc, vrev64q_f32(values), self.sign) }
+    }
+
+    #[inline(always)]
     pub unsafe fn rotate(&self, values: float32x4_t) -> float32x4_t {
-        unsafe {
-            let temp = vrev64q_f32(values);
-            vreinterpretq_f32_u32(veorq_u32(
-                vreinterpretq_u32_f32(temp),
-                vreinterpretq_u32_f32(self.sign),
-            ))
-        }
+        unsafe { vmulq_f32(self.sign, vrev64q_f32(values)) }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: float32x4_t) -> float32x4_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let sum = vaddq_f32(rotated, values);
+            let sum = self.rotate_and_add(values, values);
             vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
         }
     }
@@ -50,18 +53,16 @@ impl Rotate90F32 {
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: float32x4_t) -> float32x4_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vsubq_f32(rotated, values);
-            vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+            let diff = self.rotate_and_sub(values, values);
+            vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
         }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: float32x4_t) -> float32x4_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vaddq_f32(rotated, values);
-            vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+            let sum = self.rotate_and_add(values, values);
+            vmulq_f32(sum, vmovq_n_f32(-(0.5f32.sqrt())))
         }
     }
 }
@@ -238,29 +239,32 @@ impl Rotate90F64 {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             sign: if direction == FftDirection::Inverse {
-                unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) }
+                unsafe { vld1q_f64([-1.0, 1.0].as_ptr()) }
             } else {
-                unsafe { vld1q_f64([0.0, -0.0].as_ptr()) }
+                unsafe { vld1q_f64([1.0, -1.0].as_ptr()) }
             },
         }
     }
 
     #[inline(always)]
+    pub unsafe fn rotate_and_add(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        unsafe { vfmaq_f64(acc, vextq_f64(values, values, 1), self.sign) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_and_sub(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        unsafe { vfmsq_f64(acc, vextq_f64(values, values, 1), self.sign) }
+    }
+
+    #[inline(always)]
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
-        unsafe {
-            let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
-            vreinterpretq_f64_u64(veorq_u64(
-                vreinterpretq_u64_f64(temp),
-                vreinterpretq_u64_f64(self.sign),
-            ))
-        }
+        unsafe { vmulq_f64(self.sign, vextq_f64(values, values, 1)) }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: float64x2_t) -> float64x2_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let sum = vaddq_f64(rotated, values);
+            let sum = self.rotate_and_add(values, values);
             vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
         }
     }
@@ -268,18 +272,16 @@ impl Rotate90F64 {
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: float64x2_t) -> float64x2_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vsubq_f64(rotated, values);
-            vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
+            let diff = self.rotate_and_sub(values, values);
+            vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
         }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: float64x2_t) -> float64x2_t {
         unsafe {
-            let rotated = self.rotate(values);
-            let diff = vaddq_f64(rotated, values);
-            vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
+            let sum = self.rotate_and_add(values, values);
+            vmulq_f64(sum, vmovq_n_f64(-(0.5f64.sqrt())))
         }
     }
 }
