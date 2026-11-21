@@ -50,6 +50,27 @@ pub struct SimdStockham<V: SimdVector, T, const FIRST_PASS: bool> {
     _phantom: PhantomData<T>,
 }
 
+/// The planners compute a power of two with Stockham passes alone as long as one buffer is at
+/// most this many bytes, and with radix 4 above that.
+///
+/// Every Stockham pass reads one whole buffer and writes another, so once the two no longer fit
+/// in the cache it is limited by memory traffic, and the in-place radix 4 layers have less of
+/// that. Where this starts depends on the CPU. On a Raspberry Pi 5 (512 KiB L2, 2 MiB L3),
+/// Stockham is ahead of radix 4 up to 256 KiB per buffer.
+pub const STOCKHAM_MAX_BYTES: usize = 256 << 10;
+
+/// The longest FFT of `T` whose buffer is at most `STOCKHAM_MAX_BYTES`, or `apple_max_bytes` on
+/// Apple targets. Apple's CPUs have large caches and a lot of memory bandwidth, so each planner
+/// has its own limit for them.
+pub const fn stockham_max_len<T>(apple_max_bytes: usize) -> usize {
+    let max_bytes = if cfg!(target_vendor = "apple") {
+        apple_max_bytes
+    } else {
+        STOCKHAM_MAX_BYTES
+    };
+    max_bytes / std::mem::size_of::<Complex<T>>()
+}
+
 /// The buffers that passes go back and forth between start `GAP` bytes apart modulo
 /// `ALIASING_PERIOD`, rounded down to a cache line. Half the period is the same distance in both
 /// directions. With 1 KiB, which was used when every pass wrote a new buffer, NEON was up to 8%
@@ -185,15 +206,17 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
         self.scratch_len(if self.odd_pass_count() { 2 } else { 1 })
     }
 
-    /// Out of place, the input is free to use, so the passes go back and forth between it and
-    /// the output. That ends in the output only for an odd number of passes, so an even number
-    /// needs one scratch buffer, which `run` uses once.
+    /// Out of place, the first pass reads the input and writes either the output or the scratch,
+    /// so that the passes going back and forth between the two end in the output.
+    ///
+    /// The input could be the second buffer instead of the scratch, which would need no scratch
+    /// for an odd number of passes. But a caller's input and output usually start at the same
+    /// offset into a page, and `place()` can't move them apart. With both page-aligned, that was
+    /// 5 to 14% slower from 2^14 points up on Apple M4.
     pub fn get_outofplace_scratch_len(&self) -> usize {
-        self.scratch_len(if self.odd_pass_count() { 0 } else { 1 })
+        self.scratch_len(1)
     }
 
-    /// The first pass reads the input and writes either the output or the scratch, so that the
-    /// passes going back and forth between the two end in the output.
     pub fn get_immutable_scratch_len(&self) -> usize {
         self.scratch_len(1)
     }
@@ -219,14 +242,7 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        let input: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(input) };
-        let output: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(output) };
-        let scratch: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(scratch) };
-        let extra = match self.odd_pass_count() {
-            true => &mut [],
-            false => place(scratch, output, GAP, self.len),
-        };
-        self.run(Slot::Spare, &[], output, input, extra);
+        self.process_single_immutable(input, output, scratch);
     }
 
     #[inline(always)]
@@ -244,9 +260,9 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
     }
 
     /// Runs every pass on the data in `start`, ending in `output`. The passes go back and forth
-    /// between `output` and `spare`. If that would end in the wrong one, the first pass that can
-    /// writes `extra` instead, which is only used by that pass and the next. `extra` may be empty
-    /// if it's not needed.
+    /// between `output` and `spare`. In place with an odd number of passes that would end in
+    /// `spare`, so the first pass writes `extra` instead, which only that pass and the next use.
+    /// `extra` may be empty if it's not needed.
     ///
     /// Every pass goes through the one `run_pass` call here, so each pass function is only
     /// generated once per caller.
@@ -264,7 +280,7 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
             // Ending in `output` needs an odd number of passes left when coming from elsewhere
             let left = self.passes.len() - index;
             let destination = match (left % 2 == 1, source) {
-                (true, Slot::Output) | (false, Slot::Spare) => Slot::Extra,
+                (true, Slot::Output) => Slot::Extra,
                 (true, _) => Slot::Output,
                 (false, _) => Slot::Spare,
             };
@@ -274,8 +290,6 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
                 (Slot::Output, Slot::Spare) => (&*output, &mut *spare),
                 (Slot::Output, Slot::Extra) => (&*output, &mut *extra),
                 (Slot::Spare, Slot::Output) => (&*spare, &mut *output),
-                (Slot::Spare, Slot::Extra) => (&*spare, &mut *extra),
-                (Slot::Extra, Slot::Output) => (&*extra, &mut *output),
                 (Slot::Extra, Slot::Spare) => (&*extra, &mut *spare),
                 _ => unreachable!(),
             };
@@ -319,7 +333,7 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
 }
 
 /// Radixes for CPUs with fused multiply-add and FCMA, the first pass first, for vectors of
-/// `lanes` complex numbers. Sizes up to 2^26 use the fastest plan measured on Apple M4.
+/// `lanes` complex numbers. Sizes up to 2^20 use the fastest plan measured on Apple M4.
 #[cfg_attr(not(all(target_arch = "aarch64", feature = "fcma")), allow(dead_code))]
 pub fn fused_radixes(len: usize, lanes: usize) -> Vec<usize> {
     let bits = len.trailing_zeros() as usize;
@@ -350,16 +364,6 @@ pub fn fused_radixes(len: usize, lanes: usize) -> Vec<usize> {
         (19, _) => &[4, 4, 8, 8, 8, 4, 4, 4],
         (20, 1) => &[8, 8, 8, 8, 4, 4, 4, 4],
         (20, _) => &[4, 4, 8, 8, 8, 8, 4, 4],
-        (21, _) => &[4, 4, 8, 8, 8, 4, 4, 4, 4],
-        (22, 1) => &[8, 8, 8, 8, 4, 4, 4, 4, 4],
-        (22, _) => &[4, 8, 8, 8, 8, 4, 4, 4, 4],
-        (23, 1) => &[8, 8, 8, 8, 8, 4, 4, 4, 4],
-        (23, _) => &[4, 4, 8, 8, 8, 4, 4, 4, 4, 4],
-        (24, 1) => &[8, 8, 8, 8, 4, 4, 4, 4, 4, 4],
-        (24, _) => &[4, 4, 8, 8, 8, 8, 4, 4, 4, 4],
-        (25, _) => &[4, 4, 8, 8, 8, 4, 4, 4, 4, 4, 4],
-        (26, 1) => &[8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 4],
-        (26, _) => &[4, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4],
         _ => &[],
     };
     if measured.is_empty() {
@@ -370,7 +374,7 @@ pub fn fused_radixes(len: usize, lanes: usize) -> Vec<usize> {
 }
 
 /// Radixes for NEON without FCMA, the first pass first, for vectors of `lanes` complex numbers.
-/// Sizes up to 2^26 use the fastest plan measured on Apple M4.
+/// Sizes up to 2^20 use the fastest plan measured on Apple M4.
 #[cfg_attr(not(all(target_arch = "aarch64", feature = "neon")), allow(dead_code))]
 pub fn neon_radixes(len: usize, lanes: usize) -> Vec<usize> {
     let bits = len.trailing_zeros() as usize;
@@ -400,18 +404,6 @@ pub fn neon_radixes(len: usize, lanes: usize) -> Vec<usize> {
         (19, 1) => &[4, 4, 8, 4, 8, 4, 4, 8],
         (19, _) => &[4, 4, 4, 8, 8, 4, 4, 8],
         (20, _) => &[4, 4, 4, 8, 8, 4, 4, 4, 4],
-        (21, 1) => &[4, 4, 4, 8, 8, 8, 4, 4, 4],
-        (21, _) => &[4, 4, 4, 4, 8, 4, 4, 4, 4, 4],
-        (22, 1) => &[4, 4, 4, 4, 8, 8, 4, 4, 4, 4],
-        (22, _) => &[4, 4, 4, 4, 4, 8, 8, 8, 8],
-        (23, 1) => &[4, 4, 4, 8, 8, 8, 4, 4, 4, 4],
-        (23, _) => &[4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4],
-        (24, 1) => &[4, 4, 4, 4, 8, 8, 4, 4, 4, 4, 4],
-        (24, _) => &[4, 4, 8, 8, 8, 8, 4, 4, 4, 4],
-        (25, 1) => &[4, 4, 8, 8, 8, 4, 4, 4, 4, 4, 4],
-        (25, _) => &[4, 4, 4, 4, 4, 8, 8, 8, 8, 8],
-        (26, 1) => &[4, 4, 8, 8, 8, 8, 4, 4, 4, 4, 4],
-        (26, _) => &[8, 4, 8, 8, 8, 8, 8, 8, 8],
         _ => &[],
     };
     if measured.is_empty() {
@@ -421,12 +413,14 @@ pub fn neon_radixes(len: usize, lanes: usize) -> Vec<usize> {
     }
 }
 
-/// Radixes for sizes above the measured ones: two radix 4 passes, then radix 8 ones, then at
-/// least four radix 4 ones. On Apple M4 that's 1.05x to 1.44x faster than Radix4 at 2^27 and
-/// 2^28, for NEON and FCMA.
+/// Radixes for sizes above those with their own plan: two radix 4 passes, then radix 8 ones,
+/// then at least two radix 4 ones. With NEON that's ahead of or even with radix 4 from 2^21 to
+/// 2^26 on Apple M1 and M4.
 #[cfg_attr(not(target_arch = "aarch64"), allow(dead_code))]
 fn large_radixes(bits: usize) -> Vec<usize> {
-    let fours = (4..).find(|fours| (bits - 4 - 2 * fours).is_multiple_of(3)).unwrap();
+    let fours = (2..)
+        .find(|fours| (bits - 4 - 2 * fours).is_multiple_of(3))
+        .unwrap();
     let mut radixes = vec![4, 4];
     radixes.extend(std::iter::repeat_n(8, (bits - 4 - 2 * fours) / 3));
     radixes.extend(std::iter::repeat_n(4, fours));
@@ -550,7 +544,7 @@ mod unit_tests {
 
     #[test]
     fn radixes_cover_every_bit() {
-        for bits in 4..=26 {
+        for bits in 4..=20 {
             for lanes in [1, 2] {
                 let fused = fused_radixes(1 << bits, lanes);
                 assert_eq!(fused.iter().product::<usize>(), 1 << bits, "{fused:?}");
@@ -561,7 +555,7 @@ mod unit_tests {
             let unfused = unfused_radixes(1 << bits);
             assert_eq!(unfused.iter().product::<usize>(), 1 << bits, "{unfused:?}");
         }
-        for bits in 27..=40 {
+        for bits in 21..=40 {
             let large = large_radixes(bits);
             let large_bits: u32 = large.iter().map(|radix| radix.trailing_zeros()).sum();
             assert_eq!(large_bits as usize, bits, "{large:?}");

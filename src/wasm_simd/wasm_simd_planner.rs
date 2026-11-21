@@ -16,6 +16,7 @@ use super::wasm_simd_stockham::WasmSimdStockham;
 use super::wasm_simd_vector::{WasmVector32, WasmVector64};
 use crate::common::RadixFactor;
 use crate::math_utils::split_cross_len;
+use crate::simd::simd_stockham::{STOCKHAM_MAX_BYTES, stockham_max_len};
 
 /// The shortest power of two computed with [`WasmSimdStockham`]. Below it the butterflies and radix 4
 /// plans are faster.
@@ -480,7 +481,9 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
             fft_instance
-        } else if len.is_power_of_two() && len >= STOCKHAM_MIN_LEN {
+        } else if len.is_power_of_two()
+            && (STOCKHAM_MIN_LEN..=stockham_max_len::<T>(STOCKHAM_MAX_BYTES)).contains(&len)
+        {
             Arc::new(Recipe::Stockham { len })
         } else if factors.is_prime() {
             self.design_prime(len)
@@ -772,7 +775,7 @@ mod unit_tests {
 
     #[wasm_bindgen_test]
     fn test_plan_sse_largepoweroftwo() {
-        // Powers of 2 from 6 use Radix4, from 512 on Stockham
+        // Powers of 2 from 6 use Radix4, from 512 up to its size limit Stockham, and Radix4 above
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
         for pow in 6..9 {
             let plan = planner.design_fft_for_len(1 << pow);
@@ -781,7 +784,11 @@ mod unit_tests {
         for pow in 9..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
-            assert_eq!(*plan, Recipe::Stockham { len });
+            if len <= stockham_max_len::<f64>(STOCKHAM_MAX_BYTES) {
+                assert_eq!(*plan, Recipe::Stockham { len });
+            } else {
+                assert!(matches!(*plan, Recipe::Radix4 { .. }), "2^{pow}: {plan:?}");
+            }
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }

@@ -19,9 +19,14 @@ use crate::fcma::fcma_vector::{FcmaVector32, FcmaVector64};
 
 use crate::common::RadixFactor;
 use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
+use crate::simd::simd_stockham::stockham_max_len;
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADIXN_FACTOR: usize = 7; // the largest factor a RadixN layer can handle
+
+/// The most bytes per buffer of a Stockham FFT on Apple targets. With FCMA, Stockham is 5 to 8%
+/// behind radix 4 right above 8 MiB on Apple M1.
+const STOCKHAM_MAX_BYTES_APPLE: usize = 8 << 20;
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
@@ -506,10 +511,18 @@ impl<T: FftNum> FftPlannerFcma<T> {
         }
     }
 
+    /// The longest power of two computed with Stockham passes alone. Above it radix 4 is faster on
+    /// CPUs with small caches.
+    fn stockham_max_len() -> usize {
+        stockham_max_len::<T>(STOCKHAM_MAX_BYTES_APPLE)
+    }
+
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
             fft_instance
-        } else if len.is_power_of_two() && len >= Self::stockham_min_len() {
+        } else if len.is_power_of_two()
+            && (Self::stockham_min_len()..=Self::stockham_max_len()).contains(&len)
+        {
             Arc::new(Recipe::Stockham { len })
         } else if factors.is_prime() {
             self.design_prime(len)
@@ -801,14 +814,18 @@ mod unit_tests {
 
     #[test]
     fn test_plan_fcma_largepoweroftwo() {
-        // Powers of 2 from 128 on use Stockham
+        // Powers of 2 from 128 on use Stockham up to its size limit, and Radix4 above that
         let mut planner = FftPlannerFcma::<f64>::new().unwrap();
         let plan = planner.design_fft_for_len(64);
         assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
         for pow in 7..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
-            assert_eq!(*plan, Recipe::Stockham { len });
+            if len <= FftPlannerFcma::<f64>::stockham_max_len() {
+                assert_eq!(*plan, Recipe::Stockham { len });
+            } else {
+                assert!(matches!(*plan, Recipe::Radix4 { .. }), "2^{pow}: {plan:?}");
+            }
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }
@@ -821,8 +838,13 @@ mod unit_tests {
             assert!(matches!(*plan, Recipe::Radix4 { .. }), "2^{pow}: {plan:?}");
         }
         for pow in 8..24 {
-            let plan = planner.design_fft_for_len(1 << pow);
-            assert_eq!(*plan, Recipe::Stockham { len: 1 << pow });
+            let len = 1 << pow;
+            let plan = planner.design_fft_for_len(len);
+            if len <= FftPlannerFcma::<f32>::stockham_max_len() {
+                assert_eq!(*plan, Recipe::Stockham { len });
+            } else {
+                assert!(matches!(*plan, Recipe::Radix4 { .. }), "2^{pow}: {plan:?}");
+            }
         }
     }
 
