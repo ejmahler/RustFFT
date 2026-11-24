@@ -145,13 +145,11 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
         // figure out how much scratch space we need to request from callers
         let base_inplace_scratch = base_fft.get_inplace_scratch_len();
+        let base_outofplace_scratch = base_fft.get_outofplace_scratch_len();
+
         // the in-place path transposes into its own scratch and runs the base out of place from
         // there back into the caller's buffer, so it needs the base's out-of-place scratch on top
-        let inplace_scratch_len = if base_inplace_scratch > len {
-            len
-        } else {
-            len + base_inplace_scratch
-        };
+        let inplace_scratch_len = len + base_outofplace_scratch;
         let outofplace_scratch_len = if base_inplace_scratch > len {
             base_inplace_scratch
         } else {
@@ -276,6 +274,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
     #[inline(always)]
     pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        println!("len: {}, scratch: {}", self.len(), scratch.len());
         let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
         self.transpose(buffer, transposed);
         unsafe {
