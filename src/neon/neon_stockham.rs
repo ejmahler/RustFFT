@@ -4,7 +4,7 @@ use crate::simd::simd_stockham::{SimdStockham, neon_radixes};
 use crate::simd::simd_vector::SimdVector;
 use crate::{Fft, FftDirection, FftNum};
 
-pub struct NeonStockham<V: SimdVector, T: FftNum>(SimdStockham<V, T>);
+pub struct NeonStockham<V: SimdVector, T: FftNum>(SimdStockham<V, T, false>);
 
 impl<V: SimdVector, T: FftNum> NeonStockham<V, T> {
     pub fn new(len: usize, direction: FftDirection) -> Self {
