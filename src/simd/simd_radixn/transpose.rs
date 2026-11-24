@@ -1,8 +1,9 @@
 use num_complex::Complex;
 
-use crate::common::RadixFactor;
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
+
+use super::radix_factor::RadixFactor;
 
 /// Specifies which algorithm RadixN should use to reorder its data before computing child FFTs.
 pub enum TransposeAlgorithm {

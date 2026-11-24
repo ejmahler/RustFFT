@@ -16,7 +16,7 @@ use crate::neon::neon_raders::NeonRaders;
 use crate::neon::neon_radix4::NeonRadix4;
 use crate::neon::neon_radixn::NeonRadixN;
 
-use crate::common::RadixFactor;
+use crate::simd::simd_radixn::radix_factor::RadixFactor;
 use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
@@ -275,9 +275,15 @@ impl<T: FftNum> FftPlannerNeon<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(NeonRadix4::<float32x4_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    // SAFETY: The neon target feature must be present, which we checked in `new()`
+                    unsafe {
+                        Arc::new(NeonRadix4::<float32x4_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    }
                 } else if id_t == id_f64 {
-                    Arc::new(NeonRadix4::<float64x2_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    // SAFETY: The neon target feature must be present, which we checked in `new()`
+                    unsafe {
+                        Arc::new(NeonRadix4::<float64x2_t, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    }
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -285,10 +291,10 @@ impl<T: FftNum> FftPlannerNeon<T> {
             Recipe::RadixN { factors, base_fft } => {
                 let base_fft = self.build_fft(base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(NeonRadixN::<float32x4_t, T>::new(factors, base_fft))
+                    Arc::new(unsafe { NeonRadixN::<float32x4_t, T>::new(factors, base_fft) })
                         as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(NeonRadixN::<float64x2_t, T>::new(factors, base_fft))
+                    Arc::new(unsafe { NeonRadixN::<float64x2_t, T>::new(factors, base_fft) })
                         as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");

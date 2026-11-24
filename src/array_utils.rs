@@ -1,7 +1,8 @@
 use crate::Complex;
 use crate::FftNum;
-use crate::common::RadixFactor;
+use crate::simd::simd_radixn::radix_factor::RadixFactor;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
@@ -542,4 +543,38 @@ pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> u
         }
     }
     result
+}
+
+/// Allows callers to construct an Arc<[T]> and then take slices over it.
+pub struct ArcSlice<T> {
+    data: Arc<[T]>,
+    slice_range: std::ops::Range<usize>,
+}
+
+impl<T> ArcSlice<T> {
+    pub fn new(data: Arc<[T]>, slice_range: std::ops::Range<usize>) -> Self {
+        assert!(slice_range.start <= data.len() && slice_range.end <= data.len());
+        Self { data, slice_range }
+    }
+}
+impl<T> Deref for ArcSlice<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: We asserted in `new()` that `self.slice_range` is a valid range for this slice
+        unsafe { self.data.get_unchecked(self.slice_range.clone()) }
+    }
+}
+
+/// Selects a scratch buffer to use
+///
+/// In many, many places in RustFFT, we have logic that essentially says
+/// "If we were explicity provided scratch, use it, otherwise jsut use an existing buffer we have laying around"
+/// This function makes that logic a one-liner
+pub fn choose_scratch<'a, T>(buffer: &'a mut [T], explicit_scratch: &'a mut [T]) -> &'a mut [T] {
+    if explicit_scratch.is_empty() {
+        buffer
+    } else {
+        explicit_scratch
+    }
 }

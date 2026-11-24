@@ -16,8 +16,8 @@ use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies;
 use crate::sse::sse_raders::SseRaders;
 
-use crate::common::RadixFactor;
 use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
+use crate::simd::simd_radixn::radix_factor::RadixFactor;
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADIXN_FACTOR: usize = 7; // the largest factor a RadixN layer can handle
@@ -275,9 +275,11 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(SseRadix4::<__m128, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(unsafe { SseRadix4::<__m128, T>::new(*k, base_fft) })
+                        as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(SseRadix4::<__m128d, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(unsafe { SseRadix4::<__m128d, T>::new(*k, base_fft) })
+                        as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -285,9 +287,11 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::RadixN { factors, base_fft } => {
                 let base_fft = self.build_fft(base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(SseRadixN::<__m128, T>::new(factors, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(unsafe { SseRadixN::<__m128, T>::new(factors, base_fft) })
+                        as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(SseRadixN::<__m128d, T>::new(factors, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(unsafe { SseRadixN::<__m128d, T>::new(factors, base_fft) })
+                        as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }

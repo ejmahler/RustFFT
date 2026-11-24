@@ -11,12 +11,13 @@ use crate::{
     simd::{simd_radix4::SimdRadix4, simd_vector::SimdVector},
 };
 
-pub struct WasmSimdRadix4<V: SimdVector, T: FftNum>(SimdRadix4<V, T>);
+pub struct WasmSimdRadix4<V: SimdVector, T: FftNum>(SimdRadix4<V, T, WasmSimdRadix4Layer<V, T>>);
 impl<V: SimdVector, T: FftNum> WasmSimdRadix4<V, T> {
     pub fn new(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
-        Self(SimdRadix4::new(k, base_fft))
+        Self(SimdRadix4::new(k, base_fft, WasmSimdRadix4Layer::new))
     }
 }
+boilerplate_simd_radix4!(WasmSimdRadix4, WasmSimdRadix4Layer, #[target_feature(enable = "simd128")]);
 boilerplate_simd_fft!(WasmSimdRadix4, #[target_feature(enable = "simd128")]);
 
 #[cfg(test)]
