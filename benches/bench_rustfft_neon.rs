@@ -205,7 +205,7 @@ fn neon_compare_stockham(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("compare_stockham_f32");
 
-        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+        for p2 in [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28] {
             let len = 2usize.pow(p2);
             group.bench_function(BenchmarkId::new("stockham", len), |b| {
                 bench_stockham::<float32x4_t, f32>(b, len);
@@ -218,7 +218,7 @@ fn neon_compare_stockham(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("compare_stockham_f64");
 
-        for p2 in [8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24, 28] {
+        for p2 in [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28] {
             let len = 2usize.pow(p2);
             group.bench_function(BenchmarkId::new("stockham", len), |b| {
                 bench_stockham::<float64x2_t, f64>(b, len);
