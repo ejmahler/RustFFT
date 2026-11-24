@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use crate::{FftDirection, twiddles};
 
 use crate::simd::simd_array::SimdComplexArray;
-use crate::simd::simd_vector::SimdVector;
+use crate::simd::simd_vector::{MulSliceAlgorithm, SimdVector};
 use crate::wasm_simd::wasm_simd_butterflies::*;
 use crate::wasm_simd::wasm_simd_prime_butterflies::*;
 use crate::wasm_simd::wasm_simd_utils::transpose_complex_2x2_f32;
@@ -247,6 +247,20 @@ impl SimdVector for WasmVector64 {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // conj(left) * right is (ac + bd) + i(ad - bc), which is mul_complex with the negation
+        // moved from the swapped copy of left to the unswapped one. Same instruction count.
+        const NEGATE_IMAGINARY: v128 = f64x2(0.0, -0.0);
+        let conjugated = v128_xor(left.0, NEGATE_IMAGINARY);
+        let swapped = u64x2_shuffle::<1, 0>(left.0, left.0);
+        let sum = f64x2_mul(conjugated, u64x2_shuffle::<0, 0>(right.0, right.0));
+        Self(f64x2_add(
+            sum,
+            f64x2_mul(swapped, u64x2_shuffle::<1, 1>(right.0, right.0)),
+        ))
+    }
+
+    #[inline(always)]
     unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
         Self::Butterfly2::new(direction)
     }
@@ -275,6 +289,9 @@ impl SimdVector for WasmVector64 {
 impl SimdVector for WasmVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    // The plain loop autovectorizes to almost the same code as a handwritten deinterleaving loop,
+    // and both beat mul_complex on interleaved data.
+    const MUL_SLICE_ALGORITHM: MulSliceAlgorithm = MulSliceAlgorithm::Autovectorize;
 
     type ScalarType = f32;
 
@@ -386,6 +403,20 @@ impl SimdVector for WasmVector32 {
         let temp4 = u32x4_shuffle::<1, 0, 3, 2>(temp3, temp3);
         let temp5 = f32x4_mul(temp1, left.0);
         WasmVector32(f32x4_add(temp4, temp5))
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // conj(left) * right is (ac + bd) + i(ad - bc). Both terms pair a duplicated component of
+        // left with right, rather than a duplicated component of right with left as mul_complex
+        // does, so the duplication moves to left and right gets the lane swap. Same instruction
+        // count either way.
+        let dup_re = u32x4_shuffle::<0, 0, 2, 2>(left.0, left.0);
+        let dup_im = u32x4_shuffle::<1, 1, 3, 3>(left.0, left.0);
+        // right with the components swapped and the new imaginary component negated: (d, -c)
+        let swapped = u32x4_shuffle::<1, 4, 3, 6>(right.0, f32x4_neg(right.0));
+        let sum = f32x4_mul(dup_re, right.0);
+        WasmVector32(f32x4_add(sum, f32x4_mul(dup_im, swapped)))
     }
 
     #[inline(always)]
