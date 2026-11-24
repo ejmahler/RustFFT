@@ -236,8 +236,9 @@ impl SimdVector for float64x2_t {
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
         unsafe {
-            // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
-            let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
+            let neg = vld1q_u64([0x8000000000000000, 0].as_ptr());
+            let swapped = vextq_f64(left, left, 1);
+            let temp = vreinterpretq_f64_u64(veorq_u64(neg, vreinterpretq_u64_f64(swapped)));
             let sum = vmulq_laneq_f64::<0>(left, right);
             vfmaq_laneq_f64::<1>(sum, temp, right)
         }
@@ -250,8 +251,9 @@ impl SimdVector for float64x2_t {
             // the conjugated left and the imaginary part multiplies a plain lane swap of it. That
             // is the same shape as mul_complex, with the negation moved from the swapped vector to
             // the unswapped one.
-            let conjugated = vcombine_f64(vget_low_f64(left), vneg_f64(vget_high_f64(left)));
-            let swapped = vcombine_f64(vget_high_f64(left), vget_low_f64(left));
+            let neg = vld1q_u64([0, 0x8000000000000000].as_ptr());
+            let conjugated = vreinterpretq_f64_u64(veorq_u64(neg, vreinterpretq_u64_f64(left)));
+            let swapped = vextq_f64(left, left, 1);
             let sum = vmulq_laneq_f64::<0>(conjugated, right);
             vfmaq_laneq_f64::<1>(sum, swapped, right)
         }

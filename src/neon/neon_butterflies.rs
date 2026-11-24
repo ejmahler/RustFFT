@@ -918,16 +918,18 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
             // and
             // step 2: column FFTs
             let temp0 = parallel_fft2_interleaved_f32(values[0], values[2]);
-            let mut temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
+            let temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
 
-            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-            temp1[1] = self.rotate.rotate(temp1[1]);
+            // step 3: apply twiddle factors - skipped because we fold it into the subsequent butterfly 2's
 
             // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
             // step 5: row FFTs
             let out0 = parallel_fft2_interleaved_f32(temp0[0], temp1[0]);
-            let out2 = parallel_fft2_interleaved_f32(temp0[1], temp1[1]);
+            let out2 = [
+                self.rotate.rotate_and_add(temp0[1], temp1[1]),
+                self.rotate.rotate_and_sub(temp0[1], temp1[1]),
+            ];
 
             // step 6: transpose by swapping index 1 and 2
             [out0[0], out2[0], out0[1], out2[1]]
@@ -965,7 +967,7 @@ impl ParallelFft<float64x2_t, 4> for NeonF64ParallelButterfly4 {
         // step 2: column FFTs
         let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
         let temp1 = self.bf2.parallel_fft([data[1], data[3]]);
-
+        
         // step 3 and 5: the only twiddle factor is either 0 + i or 0 - i, so the rotation folds
         // into the second row FFT
 
@@ -1036,16 +1038,18 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
             // and
             // step 2: column FFTs
             let temp0 = solo_fft2_f64(values[0], values[2]);
-            let mut temp1 = solo_fft2_f64(values[1], values[3]);
+            let temp1 = solo_fft2_f64(values[1], values[3]);
 
-            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-            temp1[1] = self.rotate.rotate(temp1[1]);
+            // step 3: apply twiddle factors - skipped because we fold it into the subsequent butterfly 2's
 
             // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
             // step 5: row FFTs
             let out0 = solo_fft2_f64(temp0[0], temp1[0]);
-            let out2 = solo_fft2_f64(temp0[1], temp1[1]);
+            let out2 = [
+                self.rotate.rotate_and_add(temp0[1], temp1[1]),
+                self.rotate.rotate_and_sub(temp0[1], temp1[1]),
+            ];
 
             // step 6: transpose by swapping index 1 and 2
             [out0[0], out2[0], out0[1], out2[1]]
