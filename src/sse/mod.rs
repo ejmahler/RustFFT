@@ -10,6 +10,7 @@ pub mod sse_prime_butterflies;
 pub mod sse_raders;
 pub mod sse_radix4;
 pub mod sse_radixn;
+pub mod sse_stockham;
 
 mod sse_utils;
 

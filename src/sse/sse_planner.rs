@@ -5,8 +5,10 @@ use std::collections::HashMap;
 
 use std::sync::Arc;
 
+use crate::simd::simd_stockham::stockham_max_len;
 use crate::sse::sse_radix4::SseRadix4;
 use crate::sse::sse_radixn::SseRadixN;
+use crate::sse::sse_stockham::SseStockham;
 use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
 use crate::Fft;
@@ -22,6 +24,10 @@ use crate::math_utils::{PrimeFactor, PrimeFactors, split_cross_len};
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADIXN_FACTOR: usize = 7; // the largest factor a RadixN layer can handle
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
+
+// Stockham outperforms radix4 when the whole data set fits in cache, but falls behind as the data set escapes cache.
+// So set the maximum to be 256kb of data.
+const STOCKHAM_MAX_BYTES: usize = 256 << 10;
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -60,6 +66,9 @@ pub enum Recipe {
         factors: Box<[RadixFactor]>,
         base_fft: Arc<Recipe>,
     },
+    Stockham {
+        len: usize,
+    },
     Butterfly1,
     Butterfly2,
     Butterfly3,
@@ -84,6 +93,7 @@ impl Recipe {
         match self {
             Recipe::Dft(length) => *length,
             Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
+            Recipe::Stockham { len } => *len,
             Recipe::RadixN { factors, base_fft } => {
                 base_fft.len() * factors.iter().map(|f| f.radix()).product::<usize>()
             }
@@ -278,6 +288,15 @@ impl<T: FftNum> FftPlannerSse<T> {
                     Arc::new(SseRadix4::<__m128, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
                     Arc::new(SseRadix4::<__m128d, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Stockham { len } => {
+                if id_t == id_f32 {
+                    Arc::new(SseStockham::<__m128, T>::new(*len, direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SseStockham::<__m128d, T>::new(*len, direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -480,6 +499,8 @@ impl<T: FftNum> FftPlannerSse<T> {
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
             fft_instance
+        } else if len.is_power_of_two() && len <= stockham_max_len::<T>(STOCKHAM_MAX_BYTES) {
+            Arc::new(Recipe::Stockham { len })
         } else if factors.is_prime() {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
@@ -775,8 +796,12 @@ mod unit_tests {
         for pow in 6..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
-            assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
+            if pow > 14 {
+                assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
+            } else {
+                assert!(matches!(*plan, Recipe::Stockham { len: _ }));
+            }
         }
     }
 

@@ -12,7 +12,7 @@ use num_traits::{One, Zero};
 
 use crate::array_utils::{DoubleBuf, workaround_transmute, workaround_transmute_mut};
 use crate::simd::parallel_fft::ParallelFft;
-use crate::simd::simd_array::SimdComplexArrayMut;
+use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
 use crate::twiddles::compute_twiddle;
 use crate::{FftDirection, FftNum};
@@ -37,7 +37,7 @@ pub struct SimdStockham<V: SimdVector, T, const FIRST_PASS: bool> {
     first_twiddles: Box<[V::Twiddle]>,
     /// The twiddles of every pass in `passes`, in one allocation.
     twiddles: Box<[Complex<V::ScalarType>]>,
-    /// Every pass, the first first. If there is a `first_pass`, only its radix is used.
+    /// The data required to execute every pass. If there is a `first_pass`, only its radix is used.
     passes: Box<[Pass]>,
 
     butterfly2: V::Butterfly2,
@@ -98,15 +98,6 @@ fn place<'a, C>(slice: &'a mut [C], other: &[C], gap: usize, len: usize) -> &'a 
     let at = slice.as_ptr() as usize % ALIASING_PERIOD;
     let skip = (target + ALIASING_PERIOD - at) % ALIASING_PERIOD;
     &mut slice[skip / std::mem::size_of::<C>()..][..len]
-}
-
-/// Where the data is during `SimdStockham::run`. `Output`, `Spare` and `Extra` are its three buffers.
-#[derive(Copy, Clone, PartialEq)]
-enum Slot {
-    Input,
-    Output,
-    Spare,
-    Extra,
 }
 
 impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_PASS> {
@@ -185,54 +176,37 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
     pub fn len(&self) -> usize {
         self.len
     }
-
     pub fn fft_direction(&self) -> FftDirection {
         self.direction
     }
-
-    /// Scratch for `buffers` buffers, each placed by `place()`.
-    fn scratch_len(&self, buffers: usize) -> usize {
-        buffers * (self.len + placement_padding::<Complex<T>>())
-    }
-
-    fn odd_pass_count(&self) -> bool {
-        self.passes.len() % 2 == 1
-    }
-
-    /// In place, the passes go back and forth between the buffer and the scratch. That ends in
-    /// the buffer only for an even number of passes, so an odd number needs a second scratch
-    /// buffer, which `run` uses once.
     pub fn get_inplace_scratch_len(&self) -> usize {
-        self.scratch_len(if self.odd_pass_count() { 2 } else { 1 })
+        self.len + placement_padding::<Complex<T>>()
     }
-
-    /// Out of place, the first pass reads the input and writes either the output or the scratch,
-    /// so that the passes going back and forth between the two end in the output.
-    ///
-    /// The input could be the second buffer instead of the scratch, which would need no scratch
-    /// for an odd number of passes. But a caller's input and output usually start at the same
-    /// offset into a page, and `place()` can't move them apart. With both page-aligned, that was
-    /// 5 to 14% slower from 2^14 points up on Apple M4.
     pub fn get_outofplace_scratch_len(&self) -> usize {
-        self.scratch_len(1)
+        0
     }
-
     pub fn get_immutable_scratch_len(&self) -> usize {
-        self.scratch_len(1)
+        self.len + placement_padding::<Complex<T>>()
     }
 
     #[inline(always)]
     pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let buffer: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(buffer) };
         let scratch: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(scratch) };
-        let (spare, extra) = scratch.split_at_mut(self.scratch_len(1));
-        let spare = place(spare, buffer, GAP, self.len);
-        // `extra` is written from `buffer` and read into `spare`, so it goes half way between
-        let extra = match self.odd_pass_count() {
-            true => place(extra, buffer, GAP / 2, self.len),
-            false => &mut [],
-        };
-        self.run(Slot::Output, &[], buffer, spare, extra);
+        let scratch = place(scratch, buffer, GAP, self.len);
+
+        self.run(None, buffer, scratch);
+
+        // run() executed all but the final pass. It left the data in either buffer or scratch,
+        // based on whether it executed an even number of passes or odd.
+        if self.passes.len() % 2 == 1 {
+            self.run_base_pass(buffer);
+        } else {
+            self.run_base_pass(DoubleBuf {
+                input: scratch,
+                output: buffer,
+            });
+        }
     }
 
     #[inline(always)]
@@ -240,9 +214,20 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
         &self,
         input: &mut [Complex<T>],
         output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
     ) {
-        self.process_single_immutable(input, output, scratch);
+        let input: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(input) };
+        let output: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(output) };
+
+        self.run(None, input, output);
+
+        // run() executed all but the final pass. It left the data in either input or output,
+        // based on whether it executed an even number of passes or odd.
+        if self.passes.len() % 2 == 1 {
+            self.run_base_pass(DoubleBuf { input, output });
+        } else {
+            self.run_base_pass(output);
+        }
     }
 
     #[inline(always)]
@@ -255,8 +240,20 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
         let input: &[Complex<V::ScalarType>] = unsafe { workaround_transmute(input) };
         let output: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(output) };
         let scratch: &mut [Complex<V::ScalarType>] = unsafe { workaround_transmute_mut(scratch) };
-        let spare = place(scratch, output, GAP, self.len);
-        self.run(Slot::Input, input, output, spare, &mut []);
+        let scratch = place(scratch, output, GAP, self.len);
+
+        self.run(Some(input), output, scratch);
+
+        // run() executed all but the final pass. It left the data in either output or scratch,
+        // based on whether it executed an even number of passes or odd.
+        if self.passes.len() % 2 == 1 {
+            self.run_base_pass(output);
+        } else {
+            self.run_base_pass(DoubleBuf {
+                input: scratch,
+                output,
+            });
+        }
     }
 
     /// Runs every pass on the data in `start`, ending in `output`. The passes go back and forth
@@ -267,66 +264,61 @@ impl<V: SimdVector, T: FftNum, const FIRST_PASS: bool> SimdStockham<V, T, FIRST_
     /// Every pass goes through the one `run_pass` call here, so each pass function is only
     /// generated once per caller.
     #[inline(always)]
-    fn run(
+    fn run<'a>(
         &self,
-        start: Slot,
-        input: &[Complex<V::ScalarType>],
-        output: &mut [Complex<V::ScalarType>],
-        spare: &mut [Complex<V::ScalarType>],
-        extra: &mut [Complex<V::ScalarType>],
+        mut input: Option<&[Complex<V::ScalarType>]>,
+        mut a: &'a mut [Complex<V::ScalarType>],
+        mut b: &'a mut [Complex<V::ScalarType>],
     ) {
-        let mut source = start;
-        for index in 0..self.passes.len() {
-            // Ending in `output` needs an odd number of passes left when coming from elsewhere
-            let left = self.passes.len() - index;
-            let destination = match (left % 2 == 1, source) {
-                (true, Slot::Output) => Slot::Extra,
-                (true, _) => Slot::Output,
-                (false, _) => Slot::Spare,
-            };
-            let (src, dst): (&[_], &mut [_]) = match (source, destination) {
-                (Slot::Input, Slot::Output) => (input, &mut *output),
-                (Slot::Input, Slot::Spare) => (input, &mut *spare),
-                (Slot::Output, Slot::Spare) => (&*output, &mut *spare),
-                (Slot::Output, Slot::Extra) => (&*output, &mut *extra),
-                (Slot::Spare, Slot::Output) => (&*spare, &mut *output),
-                (Slot::Extra, Slot::Spare) => (&*extra, &mut *spare),
-                _ => unreachable!(),
-            };
-            self.run_pass(
-                index,
-                DoubleBuf {
-                    input: src,
-                    output: dst,
-                },
-            );
-            source = destination;
+        for index in 0..(self.passes.len() - 1) {
+            // If we were provided an immutable input buffer, consume it on the first iteration
+            // Otherwise assume the data is in `a` on the first iteration
+            self.run_pass(index, input.take().unwrap_or(a), b);
+
+            std::mem::swap(&mut a, &mut b);
         }
-        debug_assert!(source == Slot::Output);
     }
 
     #[inline(always)]
-    fn run_pass(&self, index: usize, buffer: DoubleBuf<V::ScalarType>) {
+    fn run_pass(
+        &self,
+        index: usize,
+        input: &[Complex<V::ScalarType>],
+        output: &mut [Complex<V::ScalarType>],
+    ) {
         let pass = &self.passes[index];
         unsafe {
             if Self::HAS_FIRST_PASS && index == 0 {
                 let (len, twiddles) = (self.len, &self.first_twiddles[..]);
                 match pass.radix {
-                    2 => first_pass(&self.butterfly2, len, twiddles, buffer),
-                    4 => first_pass(&self.butterfly4, len, twiddles, buffer),
-                    8 => first_pass(&self.butterfly8, len, twiddles, buffer),
-                    16 => first_pass(&self.butterfly16, len, twiddles, buffer),
+                    2 => first_pass(&self.butterfly2, len, twiddles, input, output),
+                    4 => first_pass(&self.butterfly4, len, twiddles, input, output),
+                    8 => first_pass(&self.butterfly8, len, twiddles, input, output),
+                    16 => first_pass(&self.butterfly16, len, twiddles, input, output),
                     _ => unreachable!(),
                 }
             } else {
                 let twiddles = &self.twiddles[pass.twiddle_start..];
                 match pass.radix {
-                    2 => later_pass(&self.butterfly2, pass, twiddles, buffer),
-                    4 => later_pass(&self.butterfly4, pass, twiddles, buffer),
-                    8 => later_pass(&self.butterfly8, pass, twiddles, buffer),
-                    16 => later_pass(&self.butterfly16, pass, twiddles, buffer),
+                    2 => later_pass(&self.butterfly2, pass, twiddles, input, output),
+                    4 => later_pass(&self.butterfly4, pass, twiddles, input, output),
+                    8 => later_pass(&self.butterfly8, pass, twiddles, input, output),
+                    16 => later_pass(&self.butterfly16, pass, twiddles, input, output),
                     _ => unreachable!(),
                 }
+            }
+        }
+    }
+    #[inline(always)]
+    fn run_base_pass(&self, buffer: impl SimdComplexArrayMut<V>) {
+        let pass = &self.passes[self.passes.len() - 1];
+        unsafe {
+            match pass.radix {
+                2 => base_pass(&self.butterfly2, pass.stride, buffer),
+                4 => base_pass(&self.butterfly4, pass.stride, buffer),
+                8 => base_pass(&self.butterfly8, pass.stride, buffer),
+                16 => base_pass(&self.butterfly16, pass.stride, buffer),
+                _ => unreachable!(),
             }
         }
     }
@@ -456,7 +448,8 @@ unsafe fn first_pass<V: SimdVector, const R: usize>(
     butterfly: &impl ParallelFft<V, R>,
     len: usize,
     twiddles: &[V::Twiddle],
-    mut buffer: impl SimdComplexArrayMut<V>,
+    input: &[Complex<V::ScalarType>],
+    mut output: &mut [Complex<V::ScalarType>],
 ) {
     unsafe {
         let rows = len / R;
@@ -464,7 +457,7 @@ unsafe fn first_pass<V: SimdVector, const R: usize>(
             let row = V::COMPLEX_PER_VECTOR * index;
             let mut values = [V::zero_vector(); R];
             for (k, value) in values.iter_mut().enumerate() {
-                *value = buffer.load(row + k * rows);
+                *value = input.load(row + k * rows);
             }
             let mut values = butterfly.parallel_fft(values);
             for (value, twiddle) in values[1..].iter_mut().zip(twiddles) {
@@ -472,14 +465,14 @@ unsafe fn first_pass<V: SimdVector, const R: usize>(
             }
             if V::COMPLEX_PER_VECTOR == 1 {
                 for (j, value) in values.into_iter().enumerate() {
-                    buffer.store(value, R * row + j);
+                    output.store(value, R * row + j);
                 }
             } else {
                 // The lanes hold consecutive rows, whose outputs are R apart
                 for j in (0..R).step_by(2) {
                     let [lo, hi] = V::transpose_complex_2x2([values[j], values[j + 1]]);
-                    buffer.store(lo, R * row + j);
-                    buffer.store(hi, R * row + R + j);
+                    output.store(lo, R * row + j);
+                    output.store(hi, R * row + R + j);
                 }
             }
         }
@@ -493,24 +486,11 @@ unsafe fn later_pass<V: SimdVector, const R: usize>(
     butterfly: &impl ParallelFft<V, R>,
     pass: &Pass,
     twiddles: &[Complex<V::ScalarType>],
-    mut buffer: impl SimdComplexArrayMut<V>,
+    input: &[Complex<V::ScalarType>],
+    mut output: &mut [Complex<V::ScalarType>],
 ) {
     unsafe {
         let (rows, stride) = (pass.rows, pass.stride);
-        if rows == 1 {
-            // The last pass, whose twiddles are all 1
-            for q in (0..stride).step_by(V::COMPLEX_PER_VECTOR) {
-                let mut values = [V::zero_vector(); R];
-                for (k, value) in values.iter_mut().enumerate() {
-                    *value = buffer.load(q + stride * k);
-                }
-                let values = butterfly.parallel_fft(values);
-                for (j, value) in values.into_iter().enumerate() {
-                    buffer.store(value, q + stride * j);
-                }
-            }
-            return;
-        }
         let twiddles = &twiddles[..rows * (R - 1)];
         for (row, row_twiddles) in twiddles.chunks_exact(R - 1).enumerate() {
             // Every butterfly of a row shares its twiddles, so broadcast them once per row. The
@@ -520,19 +500,40 @@ unsafe fn later_pass<V: SimdVector, const R: usize>(
             for (j, &twiddle) in row_twiddles.iter().enumerate() {
                 broadcast[j + 1] = V::broadcast_twiddle(twiddle);
             }
-            let input = stride * row;
-            let output = stride * R * row;
+            let base_in = stride * row;
+            let base_out = stride * R * row;
             for q in (0..stride).step_by(V::COMPLEX_PER_VECTOR) {
                 let mut values = [V::zero_vector(); R];
                 for (k, value) in values.iter_mut().enumerate() {
-                    *value = buffer.load(input + q + stride * rows * k);
+                    *value = input.load(base_in + q + stride * rows * k);
                 }
                 let values = butterfly.parallel_fft(values);
-                buffer.store(values[0], output + q);
+                output.store(values[0], base_out + q);
                 for j in 1..R {
                     let value = V::mul_twiddle(values[j], broadcast[j]);
-                    buffer.store(value, output + q + stride * j);
+                    output.store(value, base_out + q + stride * j);
                 }
+            }
+        }
+    }
+}
+
+// The last pass, whose twiddles are all 1
+#[inline(always)]
+unsafe fn base_pass<V: SimdVector, const R: usize>(
+    butterfly: &impl ParallelFft<V, R>,
+    stride: usize,
+    mut buffer: impl SimdComplexArrayMut<V>,
+) {
+    unsafe {
+        for q in (0..stride).step_by(V::COMPLEX_PER_VECTOR) {
+            let mut values = [V::zero_vector(); R];
+            for (k, value) in values.iter_mut().enumerate() {
+                *value = buffer.load(q + stride * k);
+            }
+            let values = butterfly.parallel_fft(values);
+            for (j, value) in values.into_iter().enumerate() {
+                buffer.store(value, q + stride * j);
             }
         }
     }
