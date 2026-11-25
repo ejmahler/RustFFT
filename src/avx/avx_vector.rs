@@ -437,6 +437,9 @@ pub trait AvxVector256: AvxVector {
     /// Fill a vector by repeating the provided complex number as many times as possible
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self;
 
+    /// Fill a vector by repeating the scalar at `ptr`
+    unsafe fn broadcast_scalar(ptr: *const Self::ScalarType) -> Self;
+
     // loads/stores of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
@@ -1117,6 +1120,10 @@ impl AvxVector256 for __m256 {
             )
         }
     }
+    #[inline(always)]
+    unsafe fn broadcast_scalar(ptr: *const Self::ScalarType) -> Self {
+        unsafe { _mm256_broadcast_ss(&*ptr) }
+    }
 
     #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
@@ -1762,6 +1769,10 @@ impl AvxVector256 for __m256d {
     #[inline(always)]
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
         unsafe { _mm256_set_pd(value.im, value.re, value.im, value.re) }
+    }
+    #[inline(always)]
+    unsafe fn broadcast_scalar(ptr: *const Self::ScalarType) -> Self {
+        unsafe { _mm256_broadcast_sd(&*ptr) }
     }
 
     #[inline(always)]
