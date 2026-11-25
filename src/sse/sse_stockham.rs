@@ -1,4 +1,4 @@
-//! The NEON side of `SimdStockham`.
+//! The SSE side of `SimdStockham`.
 
 use crate::simd::simd_stockham::{SimdStockham, unfused_radixes};
 use crate::simd::simd_vector::SimdVector;
