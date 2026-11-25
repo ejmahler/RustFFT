@@ -38,7 +38,7 @@ pub enum MulSliceAlgorithm {
 /// Safety: every method here requires the current machine to support the backend's SIMD
 /// instruction set.
 #[allow(dead_code)]
-pub trait SimdVector: Copy + Send + Sync + Sized {
+pub trait SimdVector: Copy + Send + Sync + Sized + std::fmt::Debug {
     const COMPLEX_PER_VECTOR: usize;
     const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
 
@@ -60,7 +60,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 
     /// A precomputed twiddle factor, in whichever form this backend multiplies by fastest: the
     /// plain vector when it has complex multiply instructions, a [`SplitTwiddle`] otherwise.
-    type Twiddle: Copy + Send + Sync;
+    type Twiddle: Copy + Send + Sync + std::fmt::Debug;
 
     unsafe fn zero_vector() -> Self;
 
@@ -151,7 +151,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 ///
 /// Multiplying by it is a multiply, a swap and a fused multiply-add, with no shuffles of the
 /// twiddle, so it's the fastest form for backends without complex multiply instructions.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, std::fmt::Debug)]
 pub struct SplitTwiddle<V> {
     re: V,
     im: V,

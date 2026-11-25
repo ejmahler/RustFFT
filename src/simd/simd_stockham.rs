@@ -530,6 +530,7 @@ unsafe fn cross_pass<V: SimdVector, const R: usize>(
 ///
 /// Because `COMPLEX_PER_VECTOR > 1` and we're incrementing `k` by 1, the naive algorithm would have us doing overlapping loads, which is clearly wrong.
 /// The problem is: Because `stride == 1`, we don't have parallel FFTs to load, because the FFT data is in contiguous format.
+/// This will be an issue whenever COMPLEX_PER_VECTOR > stride.
 ///
 /// `last_pass()` circumvents this by unrolling the load loop and loading `COMPLEX_PER_VECTOR` consecutive FFTs contiguous-style,
 /// and transposing them into the parallel FFTs we want.
